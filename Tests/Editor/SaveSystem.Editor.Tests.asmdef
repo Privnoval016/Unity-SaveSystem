@@ -6,6 +6,7 @@
         "SaveSystem",
         "SaveSystem.Editor",
         "SaveSystem.Tests",
+        "SaveSystem.Core.Tests",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
