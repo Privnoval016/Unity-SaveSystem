@@ -4,6 +4,7 @@
     "references": [
         "SaveSystem.Core",
         "SaveSystem",
+        "SaveSystem.Core.Tests",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
