@@ -83,6 +83,7 @@ namespace SaveSystem
             protected override double[] ToComponents(Vector3Int v) => new double[] { v.x, v.y, v.z };
             protected override Vector3Int FromComponents(double[] c) => new Vector3Int((int)c[0], (int)c[1], (int)c[2]);
         }
+
         #endregion
     }
 }

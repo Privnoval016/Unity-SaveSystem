@@ -113,25 +113,43 @@ namespace SaveSystem
         /** <summary>Restores every registered section from a document; nothing changes unless every section can be read.</summary> */
         public LoadResult Restore(SaveDocument document)
         {
-            if (document.Format > SaveDocument.CurrentFormat)
-                return new LoadResult(LoadStatus.TooNew, problem: $"Save format {document.Format} is newer than {SaveDocument.CurrentFormat}.");
+            var prepared = Prepare(document);
+            return prepared.CanApply ? Apply(prepared) : prepared.Failure;
+        }
 
-            var ordered = InRestoreOrder();
-            var prepared = new List<IPreparedRestore>(ordered.Count);
-            var reports = new List<SectionReport>(ordered.Count);
-            foreach (var section in ordered)
+        /**
+         * <summary>Upgrades and reads every registered section's data from a document without changing anything.</summary>
+         * <returns>A load to <see cref="Apply" />, or the reason it can't be.</returns>
+         */
+        public PreparedLoad Prepare(SaveDocument document)
+        {
+            if (document == null) throw new ArgumentNullException(nameof(document));
+            if (document.Format > SaveDocument.CurrentFormat)
+                return new PreparedLoad(new LoadResult(LoadStatus.TooNew, problem: $"Save format {document.Format} is newer than {SaveDocument.CurrentFormat}."));
+
+            var load = new PreparedLoad(document);
+            foreach (var section in InRestoreOrder())
             {
                 if (!TryPrepareFrom(document, section, out var restore, out var report, out var tooNew))
-                    return new LoadResult(tooNew ? LoadStatus.TooNew : LoadStatus.SectionFailed, new[] { report }, report.ToString());
-                prepared.Add(restore);
-                reports.Add(report);
+                    return new PreparedLoad(new LoadResult(tooNew ? LoadStatus.TooNew : LoadStatus.SectionFailed, new[] { report }, report.ToString()));
+                load.Add(section, restore, report);
             }
+            return load;
+        }
 
-            var failed = ApplyAll(ordered, prepared, reports);
-            HoldUnregistered(document, reports);
+        /**
+         * <summary>Applies a prepared load to live state, and holds the document's data for unregistered systems.</summary>
+         * <exception cref="InvalidOperationException">The load failed to prepare, or was already applied.</exception>
+         */
+        public LoadResult Apply(PreparedLoad load)
+        {
+            if (load == null) throw new ArgumentNullException(nameof(load));
+            load.MarkApplied();
+            var failed = ApplyAll(load.Sections, load.Restores, load.Reports);
+            HoldUnregistered(load.Document, load.Reports);
             return failed == null
-                ? new LoadResult(LoadStatus.Loaded, reports)
-                : new LoadResult(LoadStatus.RestoreFailed, reports, failed);
+                ? new LoadResult(LoadStatus.Loaded, load.Reports)
+                : new LoadResult(LoadStatus.RestoreFailed, load.Reports, failed);
         }
 
         /** <summary>Forgets held data and gives every registered section a new game's state.</summary> */
@@ -276,7 +294,7 @@ namespace SaveSystem
         private static SectionReport Failed(ISaveSection section, SectionRecord record, string problem) =>
             new SectionReport(section.Key, SectionOutcome.Failed, record.Version, problem);
 
-        private string ApplyAll(List<ISaveSection> sections, List<IPreparedRestore> prepared, List<SectionReport> reports)
+        private string ApplyAll(IReadOnlyList<ISaveSection> sections, IReadOnlyList<IPreparedRestore> prepared, List<SectionReport> reports)
         {
             string failed = null;
             for (var i = 0; i < sections.Count; i++)

@@ -268,6 +268,49 @@ namespace SaveSystem.Tests
             Assert.That(service.HeldKeys, Is.EquivalentTo(new[] { "new-area" }));
         }
 
+        [Test]
+        public void Prepare_ChangesNothing_UntilApplied()
+        {
+            var saving = new SaveService();
+            saving.Register(new CounterSection("a") { Value = 5 });
+            var document = ThroughBytes(saving);
+
+            var loading = new SaveService();
+            var section = new CounterSection("a") { Value = 1 };
+            loading.Register(section);
+            var load = loading.Prepare(document);
+
+            Assert.That(load.CanApply);
+            Assert.That(section.Value, Is.EqualTo(1));
+            Assert.That(loading.Apply(load).Succeeded);
+            Assert.That(section.Value, Is.EqualTo(5));
+            Assert.That(load.CanApply, Is.False);
+        }
+
+        [Test]
+        public void PreparedLoad_AppliesOnlyOnce()
+        {
+            var service = new SaveService();
+            service.Register(new CounterSection("a"));
+            var load = service.Prepare(service.Capture());
+            service.Apply(load);
+            Assert.Throws<InvalidOperationException>(() => service.Apply(load));
+        }
+
+        [Test]
+        public void FailedPrepare_CannotBeApplied()
+        {
+            var service = new SaveService();
+            service.Register(new CounterSection("a"));
+            var bad = new SaveDocument();
+            bad.Sections["a"] = new SectionRecord(1, new JObject { ["Value"] = "x" });
+
+            var load = service.Prepare(bad);
+            Assert.That(load.CanApply, Is.False);
+            Assert.That(load.Failure.Status, Is.EqualTo(LoadStatus.SectionFailed));
+            Assert.Throws<InvalidOperationException>(() => service.Apply(load));
+        }
+
         [TestCase("{}")]
         [TestCase("[]")]
         [TestCase("{\"format\":1}")]
