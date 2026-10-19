@@ -1,0 +1,7 @@
+{
+  "name": "Ari",
+  "health": {
+    "current": 30,
+    "max": 30
+  }
+}

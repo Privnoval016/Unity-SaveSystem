@@ -1,0 +1,37 @@
+{"format":1,"length":550,"sha256":"cf1051b8932eb1c87fe59f249ad3b3c091b9f454ccae150f6276ab3446e3d988","transforms":[]}
+{
+  "format": 1,
+  "meta": {
+    "slot": "manual-01",
+    "sequence": 4,
+    "savedAtUtc": "2026-10-19T12:00:00Z",
+    "info": {
+      "place": "harbour"
+    }
+  },
+  "sections": {
+    "player": {
+      "version": 3,
+      "data": {
+        "name": "Ari",
+        "health": {
+          "current": 30,
+          "max": 30
+        }
+      }
+    },
+    "retired": {
+      "version": 2,
+      "data": {
+        "kept": [
+          "exactly",
+          1.25,
+          null,
+          {
+            "nested": true
+          }
+        ]
+      }
+    }
+  }
+}
