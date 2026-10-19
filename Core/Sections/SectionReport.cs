@@ -28,7 +28,10 @@ namespace SaveSystem
         /** <summary>What happened to it.</summary> */
         public SectionOutcome Outcome { get; }
 
-        /** <summary>The version its data was stored at; 0 when there was none.</summary> */
+        /** <summary>The <see cref="StoredVersion" /> of a section that had no stored data.</summary> */
+        public const int NoVersion = 0;
+
+        /** <summary>The version its data was stored at; <see cref="NoVersion" /> when there was none.</summary> */
         public int StoredVersion { get; }
 
         /** <summary>Why it failed; null otherwise.</summary> */

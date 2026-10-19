@@ -13,28 +13,36 @@ namespace SaveSystem
         #region Private Fields
 
         private const int IvLength = 16;
+        private static readonly int[] KeyLengths = { 16, 24, 32 };
         private readonly byte[] _key;
 
         #endregion
 
         #region Properties
 
+        /** <summary>The id an AES transform has unless given another.</summary> */
+        public const string DefaultId = "aes";
+
         /** <inheritdoc /> */
-        public string Id => "aes";
+        public string Id { get; }
 
         #endregion
 
         #region Public API
 
         /**
+         * <summary>Makes a transform with a key.</summary>
          * <param name="key">16, 24 or 32 bytes.</param>
+         * <param name="id">Written in each file's header. Give a new key a new id (<c>aes-2</c>) and keep the old one
+         * readable, so saves made with the old key still load.</param>
          * <exception cref="ArgumentException">The key has another length.</exception>
          */
-        public AesTransform(byte[] key)
+        public AesTransform(byte[] key, string id = DefaultId)
         {
-            if (key == null || (key.Length != 16 && key.Length != 24 && key.Length != 32))
+            if (key == null || Array.IndexOf(KeyLengths, key.Length) < 0)
                 throw new ArgumentException("An AES key must be 16, 24 or 32 bytes.", nameof(key));
             _key = (byte[])key.Clone();
+            Id = id;
         }
 
         /** <inheritdoc /> */

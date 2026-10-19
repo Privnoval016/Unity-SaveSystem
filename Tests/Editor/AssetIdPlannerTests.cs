@@ -5,6 +5,7 @@ using SaveSystem.EditorTools;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Which assets get new ids, and which keep theirs.</summary> */
     public sealed class AssetIdPlannerTests
     {
         private const string GuidA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -14,7 +15,7 @@ namespace SaveSystem.Tests
         private static AssetId Id(string text) => AssetId.Parse(text);
 
         private static Dictionary<int, AssetId> Plan(params AssetIdRecord[] records) =>
-            AssetIdPlanner.Plan(records).ToDictionary(change => change.Key, change => change.Value);
+            AssetIdPlanner.Plan(records).ToDictionary(change => change.Index, change => change.Id);
 
         [Test]
         public void NewAsset_GetsItsFileGuid()
@@ -103,7 +104,7 @@ namespace SaveSystem.Tests
                 new AssetIdRecord("Assets/x.asset", GuidC, true, Id(GuidA), false),
                 new AssetIdRecord("Assets/x.asset", GuidC, false, default, true),
             }, () => sequence.Dequeue());
-            Assert.That(changes.Single().Value, Is.EqualTo(Id(GuidB)));
+            Assert.That(changes.Single().Id, Is.EqualTo(Id(GuidB)));
         }
 
         [Test]

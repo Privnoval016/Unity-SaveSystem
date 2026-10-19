@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Files on disk: atomic writes, backups, leftovers, names and folders.</summary> */
     public sealed class FileStorageTests
     {
         private TestFolder _folder;

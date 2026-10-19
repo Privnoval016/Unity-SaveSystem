@@ -9,6 +9,7 @@ using Object = UnityEngine.Object;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Saving references to assets as ids and finding them again through the catalog.</summary> */
     public sealed class AssetReferenceTests
     {
         public sealed class LoadoutData
@@ -172,9 +173,11 @@ namespace SaveSystem.Tests
         [TestCase("\"not-an-id\"")]
         [TestCase("12")]
         [TestCase("true")]
+        [TestCase("{\"nested\":{\"a\":1}}")]
+        [TestCase("[1,[2]]")]
         public void Garbage_LoadsAsNull(string value)
         {
-            var json = JObject.Parse("{\"format\":1,\"sections\":{\"loadout\":{\"version\":1,\"data\":{\"Main\":" + value + "}}}}");
+            var json = JObject.Parse("{\"format\":1,\"sections\":{\"loadout\":{\"version\":1,\"data\":{\"Main\":" + value + ",\"Bag\":[]}}}}");
             var loading = Service();
             var section = new LoadoutSection();
             loading.Register(section);

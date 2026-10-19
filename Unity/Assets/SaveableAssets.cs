@@ -5,6 +5,8 @@ namespace SaveSystem
     /** <summary>The one place that asks whether an asset is saveable, and reads its id.</summary> */
     public static class SaveableAssets
     {
+        #region Public API
+
         /** <summary>True for a live asset that implements <see cref="ISaveableAsset" />.</summary> */
         public static bool IsSaveable(Object asset) => asset != null && asset is ISaveableAsset;
 
@@ -17,5 +19,8 @@ namespace SaveSystem
             id = IdOf(asset);
             return !id.IsEmpty;
         }
+    
+
+        #endregion
     }
 }

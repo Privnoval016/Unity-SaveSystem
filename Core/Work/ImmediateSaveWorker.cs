@@ -6,6 +6,8 @@ namespace SaveSystem
     /** <summary>Runs save work at once on the caller's thread, for platforms without threads and for tests.</summary> */
     public sealed class ImmediateSaveWorker : ISaveWorker
     {
+        #region Public API
+
         /** <inheritdoc /> */
         public Task<T> Run<T>(string queue, Func<T> work)
         {
@@ -22,5 +24,8 @@ namespace SaveSystem
 
         /** <inheritdoc /> */
         public bool WaitForAll(TimeSpan timeout) => true;
+    
+
+        #endregion
     }
 }

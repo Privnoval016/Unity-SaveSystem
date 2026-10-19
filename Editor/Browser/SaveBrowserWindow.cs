@@ -14,6 +14,9 @@ namespace SaveSystem.EditorTools
 
         private const string FolderPreference = "SaveSystem.Browser.Folder";
         private const float ListWidth = 220f;
+        private const float NarrowButton = 50f;
+        private const float MediumButton = 60f;
+        private const float WideButton = 80f;
 
         private string _folder;
         private SaveBrowserModel _model;
@@ -81,11 +84,11 @@ namespace SaveSystem.EditorTools
             {
                 var folder = EditorGUILayout.DelayedTextField(_folder, EditorStyles.toolbarTextField);
                 if (folder != _folder) SetFolder(folder);
-                if (GUILayout.Button("Saves", EditorStyles.toolbarButton, GUILayout.Width(50))) SetFolder(UnitySave.SavesFolder);
-                if (GUILayout.Button("Settings", EditorStyles.toolbarButton, GUILayout.Width(60))) SetFolder(UnitySave.SettingsFolder);
-                if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(60))) Refresh();
+                if (GUILayout.Button("Saves", EditorStyles.toolbarButton, GUILayout.Width(NarrowButton))) SetFolder(UnitySave.SavesFolder);
+                if (GUILayout.Button("Settings", EditorStyles.toolbarButton, GUILayout.Width(MediumButton))) SetFolder(UnitySave.SettingsFolder);
+                if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(MediumButton))) Refresh();
                 using (new EditorGUI.DisabledScope(!Directory.Exists(_folder)))
-                    if (GUILayout.Button("Open Folder", EditorStyles.toolbarButton, GUILayout.Width(80))) EditorUtility.RevealInFinder(_folder);
+                    if (GUILayout.Button("Open Folder", EditorStyles.toolbarButton, GUILayout.Width(WideButton))) EditorUtility.RevealInFinder(_folder);
             }
         }
 

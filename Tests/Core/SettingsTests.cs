@@ -3,6 +3,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>The settings store, apart from the slots.</summary> */
     public sealed class SettingsTests
     {
         [Test]

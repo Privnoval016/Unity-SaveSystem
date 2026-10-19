@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Capturing and restoring sections, including awkward values and all-or-nothing loads.</summary> */
     public sealed class RoundTripTests
     {
         private static SaveDocument ThroughBytes(SaveService service)

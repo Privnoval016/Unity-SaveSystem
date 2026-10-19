@@ -5,6 +5,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Per-section upgrades: order, missing and failing steps, newer data, purity.</summary> */
     public sealed class UpgradeTests
     {
         private static SaveDocument DocumentWith(string key, int version, JToken data)

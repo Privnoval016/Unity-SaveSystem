@@ -5,6 +5,7 @@ using SaveSystem.EditorTools;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>The save browser: listing, reading, editing and deleting saves.</summary> */
     public sealed class SaveBrowserTests
     {
         private MemorySaveStorage _storage;

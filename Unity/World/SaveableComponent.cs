@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -14,12 +13,6 @@ namespace SaveSystem
     [RequireComponent(typeof(SaveableEntity))]
     public abstract class SaveableComponent<TData> : MonoBehaviour, ISaveableComponent where TData : class, new()
     {
-        #region Private Fields
-
-        private static readonly SectionUpgrade[] NoUpgrades = Array.Empty<SectionUpgrade>();
-
-        #endregion
-
         #region Properties
 
         /** <inheritdoc /> */
@@ -32,25 +25,21 @@ namespace SaveSystem
         public virtual int RestoreOrder => 0;
 
         /** <inheritdoc /> */
-        public virtual IReadOnlyList<SectionUpgrade> Upgrades => NoUpgrades;
+        public virtual IReadOnlyList<SectionUpgrade> Upgrades => SectionUpgrade.None;
 
         #endregion
 
         #region Public API
 
-        JToken ISaveSection.Capture(JsonSerializer serializer)
-        {
-            var data = CaptureState();
-            return data == null ? JValue.CreateNull() : JToken.FromObject(data, serializer);
-        }
+        JToken ISaveSection.Capture(JsonSerializer serializer) => SectionData.Capture(CaptureState(), serializer);
 
         IPreparedRestore ISaveSection.Prepare(JToken data, JsonSerializer serializer)
         {
-            var read = data == null || data.Type == JTokenType.Null ? null : data.ToObject<TData>(serializer);
-            return read == null ? NoChange.Instance : new PreparedState(this, read);
+            var read = SectionData.Read<TData>(data, serializer);
+            return read == null ? (IPreparedRestore)NoRestore.Instance : new PreparedRestore<TData>(RestoreIfAlive, read);
         }
 
-        IPreparedRestore ISaveSection.PrepareDefault() => NoChange.Instance;
+        IPreparedRestore ISaveSection.PrepareDefault() => NoRestore.Instance;
 
         #endregion
 
@@ -62,28 +51,9 @@ namespace SaveSystem
         /** <summary>Sets the component's state from saved data.</summary> */
         protected abstract void RestoreState(TData data);
 
-        private sealed class PreparedState : IPreparedRestore
+        private void RestoreIfAlive(TData data)
         {
-            private readonly SaveableComponent<TData> _component;
-            private readonly TData _data;
-
-            public PreparedState(SaveableComponent<TData> component, TData data)
-            {
-                _component = component;
-                _data = data;
-            }
-
-            public void Apply()
-            {
-                if (_component != null) _component.RestoreState(_data);
-            }
-        }
-
-        private sealed class NoChange : IPreparedRestore
-        {
-            public static readonly NoChange Instance = new NoChange();
-
-            public void Apply() { }
+            if (this != null) RestoreState(data);
         }
 
         #endregion

@@ -64,12 +64,12 @@ namespace SaveSystem
         }
 
         /** <summary>Makes the section for every entity in this scene, as it is now.</summary> */
-        public SceneSaveSection CreateSection(SaveSerializer serializer, int restoreOrder = 0, ISaveLog log = null)
+        public SceneSaveSection CreateSection(SaveSerializer serializer, SceneSectionOptions options = null)
         {
             var entities = new List<SaveableEntity>();
             foreach (var root in gameObject.scene.GetRootGameObjects())
                 entities.AddRange(root.GetComponentsInChildren<SaveableEntity>(true));
-            return new SceneSaveSection(Key, entities, serializer, restoreOrder, log);
+            return new SceneSaveSection(Key, entities, serializer, options);
         }
 
         /** <summary>Gives the scene a new random id, for a scene copied from another.</summary> */

@@ -10,12 +10,6 @@ namespace SaveSystem.EditorTools
     /** <summary>Finds saveable assets in the project and reads and writes their id field.</summary> */
     public static class SaveableAssetDatabase
     {
-        #region Private Fields
-
-        private const string IdValueField = "value";
-
-        #endregion
-
         #region Public API
 
         /** <summary>Every saveable ScriptableObject in the project, sub-assets included, in a stable order.</summary> */
@@ -61,7 +55,7 @@ namespace SaveSystem.EditorTools
             var serialized = new SerializedObject(asset);
             var fields = IdFields(serialized);
             if (fields.Count != 1) return false;
-            fields[0].FindPropertyRelative(IdValueField).stringValue = id.Value;
+            fields[0].FindPropertyRelative(AssetId.ValueFieldName).stringValue = id.Value;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
             return true;

@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Save slots: headers, sequences, autosave rotation, repair and deletion.</summary> */
     public sealed class SlotTests
     {
         public sealed class TestInfo
@@ -118,12 +119,34 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public async Task Autosave_OverwritesADamagedHeaderFirst()
+        public async Task Autosave_WithADamagedHeader_UsesTheSequenceInsideTheSave()
         {
             var slots = Slots(3);
             for (var i = 0; i < 3; i++) await slots.AutosaveAsync();
+            _storage.Inner.Delete("auto-03.head");
             _storage.Inner.Overwrite("auto-03.head", Encoding.UTF8.GetBytes("junk"));
-            Assert.That((await slots.AutosaveAsync()).SavedTo, Is.EqualTo("auto-03"));
+            Assert.That((await slots.AutosaveAsync()).SavedTo, Is.EqualTo("auto-01"));
+        }
+
+        [Test]
+        public async Task Autosave_WithTheNewestHeaderMissing_DoesNotOverwriteTheNewest()
+        {
+            var slots = Slots(3);
+            for (var i = 0; i < 3; i++) await slots.AutosaveAsync();
+            _storage.Inner.Delete("auto-03.head");
+            Assert.That((await slots.AutosaveAsync()).SavedTo, Is.EqualTo("auto-01"));
+            Assert.That((await slots.ListAsync()).Single(summary => summary.Slot.Name == "auto-01").Header.Sequence, Is.EqualTo(4));
+        }
+
+        [Test]
+        public async Task Autosave_WithSaveAndHeaderUnreadable_OverwritesThatSlotFirst()
+        {
+            var slots = Slots(3);
+            for (var i = 0; i < 3; i++) await slots.AutosaveAsync();
+            _storage.Inner.Delete("auto-02.head");
+            _storage.Inner.Delete("auto-02.save");
+            _storage.Inner.Overwrite("auto-02.save", Encoding.UTF8.GetBytes("junk"));
+            Assert.That((await slots.AutosaveAsync()).SavedTo, Is.EqualTo("auto-02"));
         }
 
         [Test]
@@ -135,7 +158,7 @@ namespace SaveSystem.Tests
         }
 
         [TestCase(0)]
-        [TestCase(100)]
+        [TestCase(SlotId.MaxNumber + 1)]
         public void AutosaveCountOutOfRange_Throws(int count)
         {
             Assert.Throws<ArgumentOutOfRangeException>(() => Slots(count));

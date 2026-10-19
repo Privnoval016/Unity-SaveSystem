@@ -57,7 +57,7 @@ namespace SaveSystem
         }
 
         /** <summary>Replaces an entry's bytes directly, keeping no backup: for simulating damage in tests.</summary> */
-        public void Overwrite(string name, byte[] data)
+        internal void Overwrite(string name, byte[] data)
         {
             Check(name);
             lock (_lock)

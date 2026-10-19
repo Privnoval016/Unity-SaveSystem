@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.2.0 (2026-10-19)
+
+Fixes and additions from the first code review.
+
+- **Data safety:**
+  - A section whose held data fails to restore when it registers stays unregistered, and its data stays held.
+  - A section registered between prepare and apply is restored.
+  - Saving over a damaged file keeps the good backup.
+  - Data nested too deep to read back is refused at save.
+  - A failed file swap puts the old file back, and an entry left with only its backup is still listed.
+  - An entity destroyed without `Despawn` keeps its state.
+  - A component that throws while capturing keeps its last state.
+- **Fixes:**
+  - `AssetId` now saves as JSON.
+  - Both converters skip unexpected objects and lists.
+  - Autosave rotation reads the sequence from the save when its header is lost.
+  - A save copied into another slot gets that slot's header.
+  - The save browser keeps date-like strings and can be given transforms.
+  - Entry names exclude Windows device names.
+- **Added:**
+  - `DocumentUpgrade`, for whole-save changes: rename, split, merge, retire.
+  - AES transform ids, for key rotation.
+  - A header format number; headers are read without converters.
+  - `SaveDocumentQueue`, shared by slots and settings.
+  - `SlotEntries`.
+  - `SaveFileCodec.ReadTransformIds`.
+  - `SceneSectionOptions`.
+- **Changed:**
+  - `LoadResult` is immutable.
+  - `SaveService.Capture` takes no meta (slots set it).
+  - `MemorySaveStorage.Overwrite` is internal.
+- **Tests:** 370.
+
 ## 0.1.0 (2026-10-19)
 
 First version.

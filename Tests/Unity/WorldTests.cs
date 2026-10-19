@@ -3,12 +3,14 @@ using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Saveable scenes, entities and components.</summary> */
     public sealed class WorldTests
     {
         private static readonly List<GameObject> Made = new List<GameObject>();
@@ -49,7 +51,7 @@ namespace SaveSystem.Tests
 
         private static T With<T>(SaveableEntity entity) where T : Component => entity.gameObject.AddComponent<T>();
 
-        private SceneSaveSection Section(IEnumerable<SaveableEntity> entities) => new SceneSaveSection("world/test", entities, _serializer, log: _log);
+        private SceneSaveSection Section(IEnumerable<SaveableEntity> entities) => new SceneSaveSection("world/test", entities, _serializer, new SceneSectionOptions { Log = _log });
 
         private SaveDocument Save(params SaveableEntity[] entities)
         {
@@ -284,24 +286,137 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void SaveableScene_FindsItsEntities()
+        public void SaveableScene_FindsItsOwnEntitiesOnly()
         {
-            var marker = Make("Saveable Scene").AddComponent<SaveableScene>();
-            marker.AssignNewId();
-            var entity = Entity("Chest");
-            With<TestChest>(entity).Coins = 9;
+            var preview = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                var marker = Make("Saveable Scene").AddComponent<SaveableScene>();
+                marker.AssignNewId();
+                var entity = Entity("Chest");
+                With<TestChest>(entity).Coins = 9;
+                var elsewhere = Entity("In Another Scene");
+                SceneManager.MoveGameObjectToScene(marker.gameObject, preview);
+                SceneManager.MoveGameObjectToScene(entity.gameObject, preview);
 
-            Assert.That(SaveableScene.FindIn(_scene), Is.SameAs(marker));
-            var service = new SaveService(_serializer);
-            service.Register(marker.CreateSection(_serializer));
-            Assert.That(service.Capture().Sections[marker.Key].Data["entities"][entity.Id], Is.Not.Null);
-            Assert.That(marker.Key, Does.StartWith("world/"));
+                Assert.That(SaveableScene.FindIn(preview), Is.SameAs(marker));
+                var service = new SaveService(_serializer);
+                service.Register(marker.CreateSection(_serializer));
+                var entities = (JObject)service.Capture().Sections[marker.Key].Data["entities"];
+                Assert.That(entities.Properties().Select(property => property.Name), Is.EqualTo(new[] { entity.Id }));
+                Assert.That(entities[elsewhere.Id], Is.Null);
+                Assert.That(marker.Key, Does.StartWith("world/"));
+            }
+            finally
+            {
+                EditorSceneManager.ClosePreviewScene(preview);
+            }
         }
 
         [Test]
         public void SceneWithoutAMarker_FindsNothing()
         {
-            Assert.That(SaveableScene.FindIn(_scene), Is.Null);
+            var preview = EditorSceneManager.NewPreviewScene();
+            try
+            {
+                SceneManager.MoveGameObjectToScene(Make("Not A Marker"), preview);
+                Assert.That(SaveableScene.FindIn(preview), Is.Null);
+            }
+            finally
+            {
+                EditorSceneManager.ClosePreviewScene(preview);
+            }
+        }
+
+        [Test]
+        public void EntityDestroyedWithoutDespawn_KeepsItsState()
+        {
+            var entity = Entity("Chest");
+            var chest = With<TestChest>(entity);
+            var id = entity.Id;
+            var service = new SaveService(_serializer);
+            var section = Section(new[] { entity });
+            service.Register(section);
+            chest.Coins = 42;
+
+            typeof(SaveableEntity).GetMethod("OnDestroy", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(entity, null);
+            Object.DestroyImmediate(entity.gameObject);
+            service.Unregister(section);
+            var document = service.Capture();
+
+            Assert.That(document.Sections["world/test"].Data["entities"][id]["sections"]["chest"]["data"]["Coins"].ToObject<int>(), Is.EqualTo(42));
+            Assert.That(section.Despawned, Does.Not.Contain(id));
+        }
+
+        [Test]
+        public void ComponentThatThrowsOnCapture_KeepsItsLastState_AndTheSaveGoesOn()
+        {
+            var entity = Entity("Chest");
+            var chest = With<TestChest>(entity);
+            var other = Entity("Other");
+            With<TestChest>(other).Coins = 8;
+            var service = new SaveService(_serializer);
+            service.Register(Section(new[] { entity, other }));
+            chest.Coins = 5;
+            service.Capture();
+
+            chest.Coins = 6;
+            chest.ThrowOnCapture = true;
+            var document = service.Capture();
+
+            var entities = document.Sections["world/test"].Data["entities"];
+            Assert.That(entities[entity.Id]["sections"]["chest"]["data"]["Coins"].ToObject<int>(), Is.EqualTo(5));
+            Assert.That(entities[other.Id]["sections"]["chest"]["data"]["Coins"].ToObject<int>(), Is.EqualTo(8));
+            Assert.That(_log.Warnings.Count(warning => warning.Contains(entity.Id)), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void RemovedComponent_AddedBack_GetsItsDataBack()
+        {
+            var entity = Entity("Chest");
+            With<TestChest>(entity);
+            With<TestDoor>(entity).Angle = 45;
+            var document = Save(entity);
+            Object.DestroyImmediate(entity.GetComponent<TestDoor>());
+
+            var service = new SaveService(_serializer);
+            service.Register(Section(new[] { entity }));
+            service.Restore(document);
+            var resaved = SaveDocument.FromJson(_serializer.Parse(_serializer.ToBytes(service.Capture().ToJson(), true)));
+
+            var door = With<TestDoor>(entity);
+            Assert.That(Load(resaved, entity).Succeeded);
+            Assert.That(door.Angle, Is.EqualTo(45));
+        }
+
+        [TestCase("{\"despawned\":[]}")]
+        [TestCase("{\"entities\":[],\"despawned\":[]}")]
+        [TestCase("{\"entities\":{\"abc\":5},\"despawned\":[]}")]
+        public void MalformedSceneData_FailsTheLoad(string json)
+        {
+            var entity = Entity("Chest");
+            var chest = With<TestChest>(entity);
+            chest.Coins = 3;
+            var document = new SaveDocument();
+            document.Sections["world/test"] = new SectionRecord(1, JToken.Parse(json));
+            Assert.That(Load(document, entity).Status, Is.EqualTo(LoadStatus.SectionFailed));
+            Assert.That(chest.Coins, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void DespawnedList_SurvivesSaveLoadSave()
+        {
+            var pickup = Entity("Pickup");
+            var id = pickup.Id;
+            var service = new SaveService(_serializer);
+            service.Register(Section(new[] { pickup }));
+            pickup.Despawn();
+            var first = SaveDocument.FromJson(_serializer.Parse(_serializer.ToBytes(service.Capture().ToJson(), true)));
+
+            var again = new SaveService(_serializer);
+            again.Register(Section(new SaveableEntity[0]));
+            again.Restore(first);
+            Assert.That(again.Capture().Sections["world/test"].Data["despawned"].Values<string>(), Does.Contain(id));
         }
 
         [Test]

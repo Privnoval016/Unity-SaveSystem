@@ -63,6 +63,7 @@ namespace SaveSystem
         {
             if (reader.TokenType == JsonToken.Null) return null;
             var text = reader.Value as string;
+            reader.Skip();
             if (!AssetId.TryParse(text, out var id))
             {
                 WarnOnce(text ?? reader.TokenType.ToString(), $"Save: '{text ?? reader.TokenType.ToString()}' is not an asset id.");

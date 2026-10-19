@@ -74,7 +74,6 @@ namespace SaveSystem
         private const string LengthProperty = "length";
         private const string ChecksumProperty = "sha256";
         private const string TransformsProperty = "transforms";
-        private static readonly UTF8Encoding Utf8 = new UTF8Encoding(false);
 
         private readonly ISaveTransform[] _write;
 
@@ -96,6 +95,7 @@ namespace SaveSystem
         #region Public API
 
         /**
+         * <summary>Makes a codec.</summary>
          * <param name="write">Applied in order on every write.</param>
          * <param name="alsoReadable">Transforms that are no longer written but must still be read, such as after turning encryption off.</param>
          * <exception cref="ArgumentException">Two different transforms share an id, or an id is not a valid name.</exception>
@@ -120,15 +120,23 @@ namespace SaveSystem
                 [FormatProperty] = HeaderFormat,
                 [LengthProperty] = stored.Length,
                 [ChecksumProperty] = Checksum(stored),
-                [TransformsProperty] = new JArray(_write.Select(transform => (object)transform.Id).ToArray()),
+                [TransformsProperty] = new JArray(_write.Select(transform => transform.Id)),
             };
-            var headerBytes = Utf8.GetBytes(header.ToString(Formatting.None));
+            var headerBytes = SaveSerializer.Utf8.GetBytes(header.ToString(Formatting.None));
 
             var file = new byte[headerBytes.Length + 1 + stored.Length];
             Buffer.BlockCopy(headerBytes, 0, file, 0, headerBytes.Length);
             file[headerBytes.Length] = NewLine;
             Buffer.BlockCopy(stored, 0, file, headerBytes.Length + 1, stored.Length);
             return file;
+        }
+
+        /** <summary>The transform ids a file's header names, in the order they were applied; empty when the header can't be read.</summary> */
+        public static IReadOnlyList<string> ReadTransformIds(byte[] file)
+        {
+            var lineEnd = file == null ? -1 : Array.IndexOf(file, NewLine, 0, Math.Min(file.Length, MaxHeaderLength));
+            if (lineEnd < 0 || !TryReadHeader(file, lineEnd, out _, out _, out var transforms, out _)) return Array.Empty<string>();
+            return transforms;
         }
 
         /** <summary>Checks the frame and checksum, then reverses the transforms. Never throws for bad input.</summary> */
@@ -172,7 +180,7 @@ namespace SaveSystem
             transforms = null;
             try
             {
-                var header = JObject.Parse(Utf8.GetString(file, 0, lineEnd));
+                var header = JObject.Parse(SaveSerializer.Utf8.GetString(file, 0, lineEnd));
                 if (header.Value<int?>(FormatProperty) != HeaderFormat) return Problem("Unknown header format.", out problem);
                 length = header.Value<long?>(LengthProperty) ?? -1;
                 checksum = header.Value<string>(ChecksumProperty);

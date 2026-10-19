@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
@@ -6,6 +7,7 @@ using UnityEngine;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Engine value types in saves, and the Unity defaults.</summary> */
     public sealed class ValueConverterTests
     {
         public sealed class Values
@@ -85,12 +87,19 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void FlushOnQuit_CanBeUndone()
+        public void FlushOnQuit_AddsOneQuitHandler_AndDisposingRemovesIt()
         {
-            using (UnitySave.FlushOnQuit(new ImmediateSaveWorker(), TimeSpan.FromSeconds(1)))
-            {
-            }
-            Assert.Pass();
+            var before = QuitHandlers();
+            var flush = UnitySave.FlushOnQuit(new ImmediateSaveWorker(), TimeSpan.FromSeconds(1));
+            Assert.That(QuitHandlers(), Is.EqualTo(before + 1));
+            flush.Dispose();
+            Assert.That(QuitHandlers(), Is.EqualTo(before));
+        }
+
+        private static int QuitHandlers()
+        {
+            var field = typeof(Application).GetField("quitting", BindingFlags.Static | BindingFlags.NonPublic);
+            return (field?.GetValue(null) as Delegate)?.GetInvocationList().Length ?? 0;
         }
     }
 }

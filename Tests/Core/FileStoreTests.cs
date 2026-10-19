@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Reading and writing entries through the codec, falling back to backups.</summary> */
     public sealed class FileStoreTests
     {
         private MemorySaveStorage _storage;

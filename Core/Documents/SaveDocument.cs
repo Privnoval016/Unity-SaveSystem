@@ -12,6 +12,7 @@ namespace SaveSystem
         private const string FormatProperty = "format";
         private const string MetaProperty = "meta";
         private const string SectionsProperty = "sections";
+        private const string UpgradesProperty = "upgrades";
         private const string VersionProperty = "version";
         private const string DataProperty = "data";
 
@@ -31,6 +32,9 @@ namespace SaveSystem
         /** <summary>Keyed by section key, resolving to that section's stored record. Ordered by key.</summary> */
         public IDictionary<string, SectionRecord> Sections { get; } = new SortedDictionary<string, SectionRecord>(StringComparer.Ordinal);
 
+        /** <summary>The ids of the <see cref="DocumentUpgrade" />s this save has had.</summary> */
+        public ISet<string> AppliedUpgrades { get; } = new SortedSet<string>(StringComparer.Ordinal);
+
         #endregion
 
         #region Public API
@@ -49,9 +53,13 @@ namespace SaveSystem
 
             var json = new JObject { [FormatProperty] = Format };
             if (Meta != null) json[MetaProperty] = Meta.DeepClone();
+            if (AppliedUpgrades.Count > 0) json[UpgradesProperty] = new JArray(AppliedUpgrades);
             json[SectionsProperty] = sections;
             return json;
         }
+
+        /** <summary>A deep copy, independent of this document.</summary> */
+        public SaveDocument Copy() => FromJson(ToJson());
 
         /**
          * <summary>Reads a document from a JSON tree, checking its shape.</summary>
@@ -64,6 +72,13 @@ namespace SaveSystem
             var document = new SaveDocument(ReadPositiveInt(root, FormatProperty));
             if (root.TryGetValue(MetaProperty, out var meta) && meta.Type != JTokenType.Null)
                 document.Meta = meta as JObject ?? throw new FormatException("'meta' must be an object.");
+
+            if (root.TryGetValue(UpgradesProperty, out var upgrades) && upgrades.Type != JTokenType.Null)
+            {
+                if (!(upgrades is JArray ids)) throw new FormatException("'upgrades' must be a list.");
+                foreach (var id in ids)
+                    document.AppliedUpgrades.Add(id.Type == JTokenType.String ? id.Value<string>() : throw new FormatException("Upgrade ids must be text."));
+            }
 
             if (!(root[SectionsProperty] is JObject sections)) throw new FormatException("'sections' must be an object.");
             foreach (var property in sections.Properties())

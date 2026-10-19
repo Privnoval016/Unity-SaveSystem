@@ -11,19 +11,32 @@ namespace SaveSystem
     {
         #region Properties
 
+        /** <summary>The header layout this code writes.</summary> */
+        public const int CurrentFormat = 1;
+
+        /** <summary>The JSON name of <see cref="Slot" />.</summary> */
+        public const string SlotProperty = "slot";
+
+        /** <summary>The JSON name of <see cref="Sequence" />.</summary> */
+        public const string SequenceProperty = "sequence";
+
+        /** <summary>The header layout it was written with.</summary> */
+        [JsonProperty("format")]
+        public int Format { get; set; } = CurrentFormat;
+
         /** <summary>The slot's name.</summary> */
-        [JsonProperty("slot")]
+        [JsonProperty(SlotProperty)]
         public string Slot { get; set; }
 
         /** <summary>Counts up with every save to any slot, so the oldest autosave is found without trusting the clock.</summary> */
-        [JsonProperty("sequence")]
+        [JsonProperty(SequenceProperty)]
         public long Sequence { get; set; }
 
         /** <summary>When the save was made, in UTC.</summary> */
         [JsonProperty("savedAtUtc")]
         public DateTime SavedAtUtc { get; set; }
 
-        /** <summary>The game's own fields.</summary> */
+        /** <summary>The game's own fields. Plain data only: headers are read without asset or engine converters.</summary> */
         [JsonProperty("info")]
         public TInfo Info { get; set; }
 

@@ -41,31 +41,61 @@ namespace SaveSystem.EditorTools
         #endregion
     }
 
+    /** <summary>One asset the planner gives a new id: its index among the records, and the id.</summary> */
+    public readonly struct AssetIdChange
+    {
+        #region Properties
+
+        /** <summary>The asset's index among the planned records.</summary> */
+        public int Index { get; }
+
+        /** <summary>Its new id.</summary> */
+        public AssetId Id { get; }
+
+        #endregion
+
+        #region Public API
+
+        /** <summary>Makes a change.</summary> */
+        public AssetIdChange(int index, AssetId id)
+        {
+            Index = index;
+            Id = id;
+        }
+
+        #endregion
+    }
+
     /**
      * <summary>Decides which saveable assets need a new id: those without one, and every copy of a shared id but one.</summary>
      * <remarks>
-     * A stored id is the authority and never changes unless shared. A new id is the file's GUID when that is free, so
-     * ids match what the editor shows; otherwise a random one. Of assets sharing an id, the keeper is the one whose
-     * GUID it is, then one that was already there (not just imported), then the first by path.
+     * A stored id never changes unless shared. A new id is the file's GUID when free, else random. Of assets sharing an
+     * id, the keeper is the one whose GUID it is, then one not just imported, then the first by path.
      * </remarks>
      */
     public static class AssetIdPlanner
     {
-        /** <summary>Returns, by index into <paramref name="records" />, each asset that needs a new id and the id it gets.</summary> */
-        public static IReadOnlyList<KeyValuePair<int, AssetId>> Plan(IReadOnlyList<AssetIdRecord> records, Func<AssetId> newRandomId = null)
+        #region Public API
+
+        /** <summary>Each asset that needs a new id, and the id it gets.</summary> */
+        public static IReadOnlyList<AssetIdChange> Plan(IReadOnlyList<AssetIdRecord> records, Func<AssetId> newRandomId = null)
         {
             newRandomId = newRandomId ?? AssetId.New;
             var taken = new HashSet<AssetId>(records.Where(record => !record.Current.IsEmpty).Select(record => record.Current));
-            var changes = new List<KeyValuePair<int, AssetId>>();
+            var changes = new List<AssetIdChange>();
 
             foreach (var index in NeedingIds(records))
             {
                 var id = PickId(records[index], taken, newRandomId);
                 taken.Add(id);
-                changes.Add(new KeyValuePair<int, AssetId>(index, id));
+                changes.Add(new AssetIdChange(index, id));
             }
             return changes;
         }
+
+        #endregion
+
+        #region Helpers
 
         private static IEnumerable<int> NeedingIds(IReadOnlyList<AssetIdRecord> records)
         {
@@ -104,5 +134,7 @@ namespace SaveSystem.EditorTools
             while (taken.Contains(id));
             return id;
         }
+
+        #endregion
     }
 }

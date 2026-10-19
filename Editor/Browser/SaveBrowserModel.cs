@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace SaveSystem.EditorTools
@@ -52,27 +52,34 @@ namespace SaveSystem.EditorTools
     {
         #region Private Fields
 
-        private const string SaveSuffix = ".save";
-        private const string HeaderSuffix = ".head";
-        private static readonly Encoding Utf8 = new UTF8Encoding(false);
-
         private readonly ISaveStorage _storage;
         private readonly SaveSerializer _serializer = new SaveSerializer();
-        private readonly GzipTransform _gzip = new GzipTransform();
+
+        /** <summary>Keyed by transform id, resolving to the transforms the browser can read and write again.</summary> */
+        private readonly Dictionary<string, ISaveTransform> _transforms = new Dictionary<string, ISaveTransform>(StringComparer.Ordinal);
 
         #endregion
 
         #region Public API
 
-        /** <summary>Browses the entries in a storage.</summary> */
-        public SaveBrowserModel(ISaveStorage storage) => _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+        /**
+         * <summary>Browses the entries in a storage.</summary>
+         * <param name="storage">Where the saves are.</param>
+         * <param name="transforms">The transforms saves may use; gzip when none are given. Encrypted saves need their transform.</param>
+         */
+        public SaveBrowserModel(ISaveStorage storage, IEnumerable<ISaveTransform> transforms = null)
+        {
+            _storage = storage ?? throw new ArgumentNullException(nameof(storage));
+            foreach (var transform in transforms ?? new ISaveTransform[] { new GzipTransform() })
+                _transforms[transform.Id] = transform;
+        }
 
         /** <summary>Every entry that can hold a save document: everything but slot headers.</summary> */
         public IReadOnlyList<string> Entries()
         {
             try
             {
-                return _storage.List().Where(entry => !entry.EndsWith(HeaderSuffix, StringComparison.Ordinal)).ToList();
+                return _storage.List().Where(entry => !SlotEntries.IsHeader(entry)).ToList();
             }
             catch (Exception)
             {
@@ -84,7 +91,7 @@ namespace SaveSystem.EditorTools
         public BrowsedSave Open(string entry)
         {
             var transforms = ReadTransforms(entry);
-            var store = new SaveFileStore(_storage, _serializer, new SaveFileCodec(alsoReadable: new[] { _gzip }));
+            var store = new SaveFileStore(_storage, _serializer, new SaveFileCodec(alsoReadable: _transforms.Values));
             var read = store.Read(entry, SaveDocument.FromJson);
             return new BrowsedSave(entry, read.Status == ReadStatus.Ok ? read.Value : null, read.UsedBackup,
                 read.Status == ReadStatus.Missing ? "missing" : read.Problem, transforms);
@@ -92,7 +99,7 @@ namespace SaveSystem.EditorTools
 
         /** <summary>A section's data as indented JSON.</summary> */
         public static string SectionText(SaveDocument document, string key) =>
-            document.Sections.TryGetValue(key, out var record) ? record.Data.ToString() : null;
+            document.Sections.TryGetValue(key, out var record) ? record.Data.ToString(Formatting.Indented) : null;
 
         /**
          * <summary>Replaces a section's data, keeping its version, and writes the save back with a fresh checksum.
@@ -106,7 +113,7 @@ namespace SaveSystem.EditorTools
             JToken data;
             try
             {
-                data = JToken.Parse(json);
+                data = _serializer.Parse(SaveSerializer.Utf8.GetBytes(json ?? string.Empty));
             }
             catch (Exception e)
             {
@@ -125,8 +132,8 @@ namespace SaveSystem.EditorTools
             try
             {
                 _storage.Delete(entry);
-                if (entry.EndsWith(SaveSuffix, StringComparison.Ordinal))
-                    _storage.Delete(entry.Substring(0, entry.Length - SaveSuffix.Length) + HeaderSuffix);
+                var header = SlotEntries.HeaderBeside(entry);
+                if (header != null) _storage.Delete(header);
                 return null;
             }
             catch (Exception e)
@@ -143,11 +150,7 @@ namespace SaveSystem.EditorTools
         {
             try
             {
-                var bytes = _storage.Read(entry) ?? _storage.ReadBackup(entry);
-                var lineEnd = bytes == null ? -1 : Array.IndexOf(bytes, (byte)'\n');
-                if (lineEnd < 0) return Array.Empty<string>();
-                var header = JObject.Parse(Utf8.GetString(bytes, 0, lineEnd));
-                return (header["transforms"] as JArray)?.Select(token => token.ToString()).ToList() ?? (IReadOnlyList<string>)Array.Empty<string>();
+                return SaveFileCodec.ReadTransformIds(_storage.Read(entry) ?? _storage.ReadBackup(entry));
             }
             catch (Exception)
             {
@@ -162,14 +165,14 @@ namespace SaveSystem.EditorTools
             var write = new List<ISaveTransform>();
             foreach (var id in transforms)
             {
-                if (id != _gzip.Id)
+                if (!_transforms.TryGetValue(id, out var transform))
                 {
-                    problem = $"The save uses '{id}', which the browser can't write.";
+                    problem = $"The save uses '{id}', which the browser wasn't given.";
                     return false;
                 }
-                write.Add(_gzip);
+                write.Add(transform);
             }
-            codec = new SaveFileCodec(write);
+            codec = new SaveFileCodec(write, _transforms.Values);
             return true;
         }
 

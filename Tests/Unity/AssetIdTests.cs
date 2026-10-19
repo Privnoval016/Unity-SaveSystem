@@ -6,6 +6,7 @@ using Object = UnityEngine.Object;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Asset ids: parsing, equality and Unity serialization.</summary> */
     public sealed class AssetIdTests
     {
         [Serializable]
@@ -92,8 +93,8 @@ namespace SaveSystem.Tests
             finally
             {
                 Object.DestroyImmediate(plain);
+                Object.DestroyImmediate(asset);
             }
-            Object.DestroyImmediate(asset);
             Assert.That(SaveableAssets.IsSaveable(asset), Is.False);
         }
     }

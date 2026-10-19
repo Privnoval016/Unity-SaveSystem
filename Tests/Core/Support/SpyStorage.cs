@@ -58,7 +58,7 @@ namespace SaveSystem.Tests
         public void Write(string name, byte[] data)
         {
             WriteStarted.Set();
-            WriteGate.Wait();
+            if (!WriteGate.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("write gate never opened");
             if (FailWrite(name)) throw new IOException("disk full");
             Inner.Write(name, data);
         }

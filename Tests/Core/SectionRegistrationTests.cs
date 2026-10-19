@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Registering and unregistering sections: key, version and upgrade rules, held data, restore order.</summary> */
     public sealed class SectionRegistrationTests
     {
         [Test]

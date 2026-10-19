@@ -54,6 +54,7 @@ namespace SaveSystem
 
         #region Helpers
 
+        /** <summary>Waits for a worker when the application quits, until disposed.</summary> */
         private sealed class QuitFlush : IDisposable
         {
             private readonly ISaveWorker _worker;

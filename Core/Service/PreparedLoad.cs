@@ -8,8 +8,7 @@ namespace SaveSystem
     {
         #region Private Fields
 
-        private readonly List<ISaveSection> _sections = new List<ISaveSection>();
-        private readonly List<IPreparedRestore> _restores = new List<IPreparedRestore>();
+        private readonly List<PreparedSection> _sections = new List<PreparedSection>();
         private bool _applied;
 
         #endregion
@@ -22,10 +21,11 @@ namespace SaveSystem
         /** <summary>True when every section's data was read and the load has not been applied yet.</summary> */
         public bool CanApply => Failure == null && !_applied;
 
+        /** <summary>The document after its document upgrades.</summary> */
         internal SaveDocument Document { get; }
-        internal IReadOnlyList<ISaveSection> Sections => _sections;
-        internal IReadOnlyList<IPreparedRestore> Restores => _restores;
-        internal List<SectionReport> Reports { get; } = new List<SectionReport>();
+
+        /** <summary>The prepared sections, in restore order.</summary> */
+        internal IReadOnlyList<PreparedSection> Sections => _sections;
 
         #endregion
 
@@ -35,12 +35,7 @@ namespace SaveSystem
 
         internal PreparedLoad(LoadResult failure) => Failure = failure;
 
-        internal void Add(ISaveSection section, IPreparedRestore restore, SectionReport report)
-        {
-            _sections.Add(section);
-            _restores.Add(restore);
-            Reports.Add(report);
-        }
+        internal void Add(PreparedSection section) => _sections.Add(section);
 
         internal void MarkApplied()
         {

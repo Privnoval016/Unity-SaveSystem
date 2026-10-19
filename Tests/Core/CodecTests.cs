@@ -6,6 +6,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>The file frame: header, length, checksum, gzip and AES.</summary> */
     public sealed class CodecTests
     {
         private static readonly byte[] Payload = Encoding.UTF8.GetBytes("{\n  \"format\": 1,\n  \"text\": \"hello hello hello hello\"\n}");

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
 namespace SaveSystem
@@ -14,6 +15,9 @@ namespace SaveSystem
 
         #region Properties
 
+        /** <summary>No upgrades, for sections still at version 1.</summary> */
+        public static IReadOnlyList<SectionUpgrade> None { get; } = Array.Empty<SectionUpgrade>();
+
         /** <summary>The version this step reads; it produces <c>FromVersion + 1</c>.</summary> */
         public int FromVersion { get; }
 
@@ -22,6 +26,7 @@ namespace SaveSystem
         #region Public API
 
         /**
+         * <summary>Makes a step.</summary>
          * <param name="fromVersion">The version this step reads, from 1.</param>
          * <param name="upgrade">Returns the next version's data. It receives a copy, so it may change it in place.</param>
          */

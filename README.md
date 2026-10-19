@@ -55,6 +55,16 @@ public sealed class InventorySection : SaveSection<InventoryData>
   a new game and a system added after the save was made.
 - **`RestoreOrder`** orders sections that depend on each other: lower restores first.
 
+**Rules for data classes:**
+
+- **Use fields or settable properties for collections.** A load replaces a list it can set. A get-only list that
+  starts with items would be appended to.
+- **Don't key dictionaries by assets.** A dictionary's keys are written as text, not through the asset converter.
+  Use a list of entries, each holding the asset and its value.
+- **Numbers go through `double`.** `decimal` keeps about 15 significant digits, and `-0` loads as `0`.
+- **On platforms that strip code (IL2CPP)**, keep data classes from being stripped with `[Preserve]` or a
+  `link.xml` entry.
+
 ### Registering
 
 ```csharp
@@ -63,6 +73,8 @@ service.Register(new InventorySection(inventory));
 ```
 
 - **A duplicate key throws, as does an invalid key, version or upgrade.** That is a bug, so it fails loudly.
+- **When a section registers and data is held for it, it is restored at once.** If that data can't be used, or the
+  restore throws, the section is not registered, the data stays held, and the result says why.
 - **Unregistering keeps the section's current state held.** It goes into the next save, and the section is
   restored from it when it registers again. A scene's world state uses this as areas load and unload.
 - **Data for a key no system has registered is held unchanged and written back**, whether the system was
@@ -81,7 +93,8 @@ can't be used, nothing changes and the result says why:
 The only partial outcome is a section that throws while applying its data. It is reported as `RestoreFailed`
 and the other sections are still restored.
 
-`service.Prepare(document)` and `service.Apply(prepared)` expose the two steps for code that needs them.
+`service.Prepare(document)` and `service.Apply(prepared)` expose the two steps for code that needs them. A section
+registered between the two is restored by `Apply` too.
 
 Every load returns a `LoadResult`:
 
@@ -119,6 +132,25 @@ private static readonly SectionUpgrade[] Steps =
 - **Keep a real save from each version as a test fixture**, and test that it loads to the expected state. See
   `Tests/Core/Fixtures`. Fixtures are frozen and never regenerated.
 
+### Changes across the whole save
+
+Renaming a section's key, splitting a section in two, merging two, or dropping a retired one is a
+`DocumentUpgrade`. It runs once per save, before any section reads its data:
+
+```csharp
+service.AddDocumentUpgrade(new DocumentUpgrade("party-to-roster", document =>
+{
+    if (!document.Sections.TryGetValue("party", out var record)) return;
+    document.Sections.Remove("party");
+    document.Sections["roster"] = record;
+}));
+```
+
+- **Each save records the ids of the upgrades it has had**, so an upgrade never runs twice on one save. A new
+  save records every upgrade, since its data is already current.
+- **Ids are permanent.** Never change or reuse one.
+- **Upgrades run on a copy, in the order added.** One that throws fails the load and changes nothing.
+
 ## Slots, autosaves and settings
 
 ```csharp
@@ -137,12 +169,20 @@ await slots.DeleteAsync(SlotId.Manual(1));
 - **Loading reads and checks the file in the background**, then restores on the thread that awaited it. Call it
   from the main thread.
 - **One job runs at a time.** A load waits for a save in progress, and the second of two saves to a slot wins.
-- **Each slot has a small header file beside it** (`<slot>.head`). It holds the slot's name, a sequence number,
-  the time and the game's own `TInfo` fields (chapter, place, play time), so the save screen lists slots without
-  reading saves. A copy of the header also lives inside the save, so a lost or stale header is rewritten when the
-  slot loads, or by `RepairHeaderAsync`.
+- **Each slot has a small header file beside it** (`<slot>.head`). It holds:
+  - a format number;
+  - the slot's name;
+  - a sequence number;
+  - the time;
+  - the game's own `TInfo` fields (chapter, place, play time).
+
+  The save screen lists slots from these without reading saves. A copy of the header also lives inside the save,
+  so a lost or stale header is rewritten when the slot loads, or by `RepairHeaderAsync`.
+- **`TInfo` is plain data** (text, numbers, ids as text). Headers are read in the background without the asset
+  and engine converters.
 - **Autosaves rotate by sequence number, not by the clock**, so a changed system clock can't make the newest
-  autosave look oldest.
+  autosave look oldest. When a header is lost, the sequence comes from the copy inside the save.
+- **Share one worker** between the slots and the settings, so one flush waits for both.
 - **Settings are separate:** a `SettingsStore` with its own `SaveService` and its own folder
   (`UnitySave.SettingsFolder`), so deleting every slot never touches them.
 - **On quit**, `UnitySave.FlushOnQuit(worker, timeout)` waits for writes still in progress.
@@ -164,6 +204,13 @@ Each file is one header line, a newline, then the payload:
 **Saving is atomic.** The file is written to `<name>.tmp` and flushed to disk. The current file then becomes
 `<name>.bak`, and the new file takes its place. A crash at any moment leaves either the old save or its backup.
 
+- **If the swap fails**, the old file is put back.
+- **A save left with only its backup** is still listed and loads from the backup.
+- **Saving over a damaged file** keeps the good backup rather than the damage.
+- **Data nested deeper than `SaveSerializer.MaxDepth` (128) is refused at save**, so nothing unreadable is ever
+  written.
+- **Entry names are lower case**, and never a name Windows reserves (`con`, `nul`, `com1`, ...).
+
 **The checksum is SHA-256 over the payload.** Atomic writes only protect against our own crash mid-save. They
 don't protect against what happens to a file afterwards:
 
@@ -181,8 +228,12 @@ under a millisecond per save.
 - `GzipTransform` compresses;
 - `AesTransform` encrypts with a key the game supplies.
 
-The key ships with the game, so encryption stops casual editing, not a determined player. The header records
-which transforms ran. After switching a transform off, pass it as `alsoReadable` so old saves still load.
+The key ships with the game, so encryption stops casual editing, not a determined player.
+
+- **The header records which transforms ran.**
+- **After switching a transform off,** pass it as `alsoReadable` so old saves still load.
+- **To change the AES key,** give the new key a new id (`new AesTransform(newKey, "aes-2")`) and keep the old one
+  readable.
 
 **The JSON rules are the same on every machine:**
 
@@ -219,7 +270,8 @@ public sealed class ItemDefinition : ScriptableObject, ISaveableAsset
 
 **Saving a reference needs no code.** A data class just holds the asset: `public ItemDefinition Item;`. The
 serializer from `UnitySave.CreateSerializer(catalog)` writes its id and finds the asset again on load. An id
-with no asset, or with an asset of the wrong type, loads as null with one warning.
+with no asset, or with an asset of the wrong type, loads as null with one warning. An `AssetId` field saves as its
+32 hex digits.
 
 **Builds find assets through an `AssetCatalog`.** Create one with *Create > Save System > Asset Catalog* and pass
 it to `CreateSerializer`. The editor keeps it filled:
@@ -251,8 +303,8 @@ For things in a scene that remember their state, such as chests, doors, levers a
    change. With no saved data, a component keeps the state the scene gave it.
 4. **Remove an object for good with `entity.Despawn()`.** The scene's save remembers it is gone, and it is
    removed again whenever the scene loads.
-5. **Register the scene's section when the scene loads, and unregister it before the scene unloads.** Its state
-   is held in between, so leaving an area and coming back keeps everything:
+5. **Register the scene's section when the scene loads, and unregister it when the scene unloads.** Its state is
+   held in between, so leaving an area and coming back keeps everything:
 
 ```csharp
 var section = SaveableScene.FindIn(scene).CreateSection(serializer);
@@ -263,8 +315,26 @@ service.Unregister(section); // holds the scene's state until it loads again
 
 - **Each entity is its own small save.** Its components can upgrade, a removed component's data is kept, and one
   entity whose data can't be read fails the whole scene's restore rather than half of it.
+- **An entity destroyed without `Despawn`** has its state kept as it was. Unloading the scene is one example.
+- **A component that throws while capturing keeps its last saved state**, with a warning, and the save goes on.
 - **Data for entities no longer in the scene is kept.**
+- **Reload a scene before loading a save into it.** A scene section restores saved state, but it can't undo what
+  happened in the scene since it loaded, such as a chest opened or a pickup taken.
 - **Only objects placed in the scene are saved.** Objects spawned at runtime belong in a system's own section.
+- **`CreateSection(serializer, options)`** takes a `SceneSectionOptions` with the restore order and the log.
+
+## Tools
+
+*Tools > Save System* in the editor:
+
+| Tool | What it does |
+|---|---|
+| **Save Browser** | Lists the saves and settings in a folder. Shows each section's version and data. Edits a section and writes the save back with a fresh checksum (the old file becomes the backup). Deletes a save and its header. Opens the folder |
+| **Rebuild Asset Catalog** | Fills every catalog now |
+| **Audit Asset Ids** | Logs every id problem |
+
+The browser reads plain and gzip saves. Code that opens `SaveBrowserModel` itself can pass the AES transforms the
+game uses, to read encrypted saves as well. Deleting asks inside the window, never in a dialog.
 
 ## Tests
 

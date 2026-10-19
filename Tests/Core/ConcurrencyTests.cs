@@ -9,6 +9,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Background writes: ordering, waiting, flushing, culture on worker threads.</summary> */
     public sealed class ConcurrencyTests
     {
         private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
@@ -28,6 +29,31 @@ namespace SaveSystem.Tests
 
         [TearDown]
         public void TearDown() => _folder.Dispose();
+
+        /** <summary>Runs every job under a given culture on the pool thread itself.</summary> */
+        private sealed class CultureWorker : ISaveWorker
+        {
+            private readonly BackgroundSaveWorker _inner = new BackgroundSaveWorker();
+            private readonly CultureInfo _culture;
+
+            public CultureWorker(CultureInfo culture) => _culture = culture;
+
+            public Task<T> Run<T>(string queue, Func<T> work) => _inner.Run(queue, () =>
+            {
+                var previous = Thread.CurrentThread.CurrentCulture;
+                Thread.CurrentThread.CurrentCulture = _culture;
+                try
+                {
+                    return work();
+                }
+                finally
+                {
+                    Thread.CurrentThread.CurrentCulture = previous;
+                }
+            });
+
+            public bool WaitForAll(TimeSpan timeout) => _inner.WaitForAll(timeout);
+        }
 
         private SaveSlots<object> Slots(ISaveStorage storage, ISaveWorker worker) =>
             new SaveSlots<object>(_service, storage, null, new SlotOptions { Worker = worker });
@@ -54,9 +80,16 @@ namespace SaveSystem.Tests
             storage.WriteGate.Reset();
             var slots = Slots(storage, new BackgroundSaveWorker());
             _counter.Value = 1;
-            var save = slots.SaveAsync(SlotId.Manual(1));
-            _counter.Value = 99;
-            storage.WriteGate.Set();
+            Task<SaveResult> save;
+            try
+            {
+                save = slots.SaveAsync(SlotId.Manual(1));
+                _counter.Value = 99;
+            }
+            finally
+            {
+                storage.WriteGate.Set();
+            }
             await save;
 
             _counter.Value = 0;
@@ -75,13 +108,20 @@ namespace SaveSystem.Tests
             storage.WriteGate.Reset();
             storage.WriteStarted.Reset();
             _counter.Value = 2;
-            var save = slots.SaveAsync(SlotId.Manual(1));
-            Assert.That(storage.WriteStarted.Wait(Patience));
-            var load = slots.LoadAsync(SlotId.Manual(1));
-            await Task.Delay(100);
-            Assert.That(load.IsCompleted, Is.False);
-
-            storage.WriteGate.Set();
+            Task<SaveResult> save;
+            Task<LoadResult> load;
+            try
+            {
+                save = slots.SaveAsync(SlotId.Manual(1));
+                Assert.That(storage.WriteStarted.Wait(Patience));
+                load = slots.LoadAsync(SlotId.Manual(1));
+                await Task.Delay(300);
+                Assert.That(load.IsCompleted, Is.False);
+            }
+            finally
+            {
+                storage.WriteGate.Set();
+            }
             await save;
             _counter.Value = 0;
             await load;
@@ -126,9 +166,14 @@ namespace SaveSystem.Tests
             storage.WriteGate.Reset();
             var slots = Slots(storage, new BackgroundSaveWorker());
             var save = slots.SaveAsync(SlotId.Manual(1));
-
-            Assert.That(slots.Flush(TimeSpan.FromMilliseconds(100)), Is.False);
-            storage.WriteGate.Set();
+            try
+            {
+                Assert.That(slots.Flush(TimeSpan.FromMilliseconds(100)), Is.False);
+            }
+            finally
+            {
+                storage.WriteGate.Set();
+            }
             Assert.That(slots.Flush(Patience));
             Assert.That(save.IsCompleted);
             Assert.That(save.Result.Succeeded);
@@ -175,29 +220,38 @@ namespace SaveSystem.Tests
             Assert.That(jobs[6].IsFaulted, Is.False);
         }
 
-        [Test]
-        public async Task BackgroundWrites_UseInvariantCulture_WhateverTheThreadCulture()
+        [TestCase("de-DE")]
+        [TestCase("tr-TR")]
+        public async Task BackgroundWrites_UseInvariantCulture_WhateverTheWorkerThreadsCulture(string culture)
         {
-            var previous = CultureInfo.DefaultThreadCurrentCulture;
-            try
-            {
-                CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("de-DE");
-                var profile = new ProfileSection();
-                profile.Data.FloatValue = 2.5f;
-                _service.Register(profile);
-                var storage = new MemorySaveStorage();
-                var slots = Slots(storage, new BackgroundSaveWorker());
-                await slots.SaveAsync(SlotId.Manual(1));
+            var profile = new ProfileSection();
+            profile.Data.FloatValue = 2.5f;
+            profile.Data.Name = "TITLE İı";
+            _service.Register(profile);
+            var storage = new MemorySaveStorage();
+            var slots = Slots(storage, new CultureWorker(new CultureInfo(culture)));
+            await slots.SaveAsync(SlotId.Named("quick"));
 
-                Assert.That(Encoding.UTF8.GetString(storage.Read("manual-01.save")), Does.Contain("2.5"));
-                profile.Data = new ProfileData();
-                await slots.LoadAsync(SlotId.Manual(1));
-                Assert.That(profile.Data.FloatValue, Is.EqualTo(2.5f));
-            }
-            finally
-            {
-                CultureInfo.DefaultThreadCurrentCulture = previous;
-            }
+            Assert.That(Encoding.UTF8.GetString(storage.Read("quick.save")), Does.Contain("2.5"));
+            profile.Data = new ProfileData();
+            Assert.That((await slots.LoadAsync(SlotId.Named("quick"))).Succeeded);
+            Assert.That(profile.Data.FloatValue, Is.EqualTo(2.5f));
+            Assert.That(profile.Data.Name, Is.EqualTo("TITLE İı"));
+        }
+
+        [Test]
+        public void WaitForAll_WithAFaultedJob_StillReportsDone()
+        {
+            var worker = new BackgroundSaveWorker();
+            var failing = worker.Run<int>("q", () => throw new InvalidOperationException("boom"));
+            Assert.That(worker.WaitForAll(Patience));
+            Assert.That(failing.IsFaulted);
+        }
+
+        [Test]
+        public void WaitForAll_WithNothingQueued_IsDone()
+        {
+            Assert.That(new BackgroundSaveWorker().WaitForAll(TimeSpan.Zero));
         }
 
         [Test]

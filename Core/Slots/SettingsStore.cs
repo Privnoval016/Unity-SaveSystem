@@ -13,8 +13,7 @@ namespace SaveSystem
 
         private const string Queue = "settings";
 
-        private readonly SaveService _service;
-        private readonly ISaveWorker _worker;
+        private readonly SaveDocumentQueue _documents;
         private readonly SaveFileStore _store;
 
         #endregion
@@ -31,36 +30,20 @@ namespace SaveSystem
         /** <summary>Makes a store for the service's sections.</summary> */
         public SettingsStore(SaveService service, ISaveStorage storage, SaveFileOptions options = null)
         {
-            _service = service ?? throw new ArgumentNullException(nameof(service));
+            if (service == null) throw new ArgumentNullException(nameof(service));
             options = options ?? new SaveFileOptions();
-            _worker = options.Worker ?? throw new ArgumentException("Options have no worker.", nameof(options));
+            _documents = new SaveDocumentQueue(service, options.Worker, Queue);
             _store = new SaveFileStore(storage, service.Serializer, options.Codec);
         }
 
         /** <summary>Captures the settings now and writes them in the background.</summary> */
-        public Task<SaveResult> SaveAsync()
-        {
-            SaveDocument document;
-            try
-            {
-                document = _service.Capture();
-            }
-            catch (SectionCaptureException e)
-            {
-                return Task.FromResult(new SaveResult(SaveStatus.CaptureFailed, e.Message));
-            }
-            return _worker.Run(Queue, () => _store.Write(Entry, document.ToJson()));
-        }
+        public Task<SaveResult> SaveAsync() => _documents.SaveAsync(document => _store.Write(Entry, document.ToJson()));
 
         /** <summary>Reads the settings in the background, then restores them on the calling thread.</summary> */
-        public async Task<LoadResult> LoadAsync()
-        {
-            var read = await _worker.Run(Queue, () => _store.Read(Entry, SaveDocument.FromJson));
-            return DocumentRestore.Restore(_service, read);
-        }
+        public Task<LoadResult> LoadAsync() => _documents.LoadAsync(() => _store.Read(Entry, SaveDocument.FromJson));
 
         /** <summary>Blocks until pending writes finish, or the timeout passes.</summary> <returns>True when all finished.</returns> */
-        public bool Flush(TimeSpan timeout) => _worker.WaitForAll(timeout);
+        public bool Flush(TimeSpan timeout) => _documents.Flush(timeout);
 
         #endregion
     }

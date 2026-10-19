@@ -1,10 +1,12 @@
 using System;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace SaveSystem
 {
     /** <summary>A stable id for an asset a save can point at: 32 lower-case hex digits, filled in by the editor.</summary> */
     [Serializable]
+    [JsonConverter(typeof(AssetIdJsonConverter))]
     public struct AssetId : IEquatable<AssetId>
     {
         #region Inspector Fields
@@ -17,6 +19,9 @@ namespace SaveSystem
         #region Private Fields
 
         private const int Length = 32;
+
+        /** <summary>The serialized field's name, for editor tools that write it.</summary> */
+        internal const string ValueFieldName = nameof(value);
 
         #endregion
 
@@ -31,8 +36,6 @@ namespace SaveSystem
         #endregion
 
         #region Public API
-
-        private AssetId(string text) => value = text;
 
         /** <summary>A new random id.</summary> */
         public static AssetId New() => new AssetId(Guid.NewGuid().ToString("N"));
@@ -72,6 +75,12 @@ namespace SaveSystem
 
         /** <summary>Ids differ when their text does.</summary> */
         public static bool operator !=(AssetId left, AssetId right) => !left.Equals(right);
+
+        #endregion
+
+        #region Helpers
+
+        private AssetId(string text) => value = text;
 
         #endregion
     }

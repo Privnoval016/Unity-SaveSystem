@@ -1,0 +1,2 @@
+Tests/Core/Fixtures/* -text
+*.save -text

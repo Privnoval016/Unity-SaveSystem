@@ -11,11 +11,13 @@ namespace SaveSystem
         private const string ManualPrefix = "manual-";
         private const string AutoPrefix = "auto-";
         private const int MaxNameLength = 32;
-        private const int MaxNumber = 999;
 
         #endregion
 
         #region Properties
+
+        /** <summary>The highest slot number.</summary> */
+        public const int MaxNumber = 999;
 
         /** <summary>The slot's name on disk.</summary> */
         public string Name { get; }
@@ -27,8 +29,6 @@ namespace SaveSystem
 
         #region Public API
 
-        private SlotId(string name) => Name = name;
-
         /** <summary>Manual slot <paramref name="number" />, from 1.</summary> */
         public static SlotId Manual(int number) => new SlotId(ManualPrefix + FormatNumber(number));
 
@@ -36,7 +36,7 @@ namespace SaveSystem
         public static SlotId Auto(int number) => new SlotId(AutoPrefix + FormatNumber(number));
 
         /**
-         * <summary>A slot with its own name: lower-case letters, digits and '-', at most 32 characters.</summary>
+         * <summary>A slot with its own name: lower-case letters, digits and '-', at most 32 characters, not a name Windows reserves.</summary>
          * <exception cref="ArgumentException">The name is invalid or starts with the autosave prefix.</exception>
          */
         public static SlotId Named(string name)
@@ -49,9 +49,9 @@ namespace SaveSystem
         public static bool TryParse(string name, out SlotId slot)
         {
             slot = default;
-            if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength) return false;
+            if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength || !SaveNames.IsValidEntryName(name)) return false;
             foreach (var c in name)
-                if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
+                if (c == '.' || c == '_') return false;
             slot = new SlotId(name);
             return true;
         }
@@ -71,6 +71,8 @@ namespace SaveSystem
         #endregion
 
         #region Helpers
+
+        private SlotId(string name) => Name = name;
 
         private static string FormatNumber(int number)
         {

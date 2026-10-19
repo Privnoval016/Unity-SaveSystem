@@ -9,6 +9,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>The JSON rules: culture, dates, special numbers, type names, nesting, encoding.</summary> */
     public sealed class SerializerTests
     {
         private static ProfileData RoundTrip(ProfileData data, out string text)
@@ -71,6 +72,8 @@ namespace SaveSystem.Tests
         [Test]
         public void Dates_AreWrittenInUtc_AndReadBackAsTheSameInstant()
         {
+            if (TimeZoneInfo.Local.BaseUtcOffset == TimeSpan.Zero && !TimeZoneInfo.Local.SupportsDaylightSavingTime)
+                Assert.Ignore("Local time is UTC here, so this can't tell local from UTC.");
             var local = new DateTime(2026, 10, 19, 15, 30, 0, DateTimeKind.Local);
             var loaded = RoundTrip(new ProfileData { SavedAt = local }, out var text);
             Assert.That(text, Does.Contain(local.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)));
@@ -92,10 +95,16 @@ namespace SaveSystem.Tests
         [TestCase(float.NegativeInfinity)]
         [TestCase(float.MaxValue)]
         [TestCase(float.Epsilon)]
-        [TestCase(-0f)]
         public void SpecialFloats_RoundTrip(float value)
         {
-            Assert.That(RoundTrip(new ProfileData { FloatValue = value }, out _).FloatValue, Is.EqualTo(value));
+            var loaded = RoundTrip(new ProfileData { FloatValue = value }, out _).FloatValue;
+            Assert.That(BitConverter.ToInt32(BitConverter.GetBytes(loaded), 0), Is.EqualTo(BitConverter.ToInt32(BitConverter.GetBytes(value), 0)));
+        }
+
+        [Test]
+        public void NegativeZero_LoadsAsZero()
+        {
+            Assert.That(RoundTrip(new ProfileData { FloatValue = -0f }, out _).FloatValue, Is.EqualTo(0f));
         }
 
         [TestCase(double.NaN)]

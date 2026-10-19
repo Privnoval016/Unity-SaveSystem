@@ -6,8 +6,17 @@ namespace SaveSystem
     /** <summary>Compresses a save with gzip.</summary> */
     public sealed class GzipTransform : ISaveTransform
     {
+        #region Properties
+
+        /** <summary>The id written in each file's header.</summary> */
+        public const string GzipId = "gzip";
+
         /** <inheritdoc /> */
-        public string Id => "gzip";
+        public string Id => GzipId;
+
+        #endregion
+
+        #region Public API
 
         /** <inheritdoc /> */
         public byte[] Apply(byte[] data)
@@ -30,5 +39,7 @@ namespace SaveSystem
                 return output.ToArray();
             }
         }
+
+        #endregion
     }
 }

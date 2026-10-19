@@ -17,10 +17,12 @@ namespace SaveSystem.Tests
         public bool Open { get; set; }
         public int Coins { get; set; } = 10;
         public bool ThrowOnRestore { get; set; }
+        public bool ThrowOnCapture { get; set; }
 
         public override string Key => "chest";
 
-        protected override ChestData CaptureState() => new ChestData { Open = Open, Coins = Coins };
+        protected override ChestData CaptureState() =>
+            ThrowOnCapture ? throw new InvalidOperationException("chest capture broke") : new ChestData { Open = Open, Coins = Coins };
 
         protected override void RestoreState(ChestData data)
         {

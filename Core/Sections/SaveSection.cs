@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -11,12 +10,6 @@ namespace SaveSystem
      */
     public abstract class SaveSection<TData> : ISaveSection where TData : class, new()
     {
-        #region Private Fields
-
-        private static readonly SectionUpgrade[] NoUpgrades = Array.Empty<SectionUpgrade>();
-
-        #endregion
-
         #region Properties
 
         /** <inheritdoc /> */
@@ -29,25 +22,18 @@ namespace SaveSystem
         public virtual int RestoreOrder => 0;
 
         /** <inheritdoc /> */
-        public virtual IReadOnlyList<SectionUpgrade> Upgrades => NoUpgrades;
+        public virtual IReadOnlyList<SectionUpgrade> Upgrades => SectionUpgrade.None;
 
         #endregion
 
         #region Public API
 
-        JToken ISaveSection.Capture(JsonSerializer serializer)
-        {
-            var data = Capture();
-            return data == null ? JValue.CreateNull() : JToken.FromObject(data, serializer);
-        }
+        JToken ISaveSection.Capture(JsonSerializer serializer) => SectionData.Capture(Capture(), serializer);
 
-        IPreparedRestore ISaveSection.Prepare(JToken data, JsonSerializer serializer)
-        {
-            var read = data == null || data.Type == JTokenType.Null ? null : data.ToObject<TData>(serializer);
-            return new PreparedRestore(this, read ?? CreateDefault());
-        }
+        IPreparedRestore ISaveSection.Prepare(JToken data, JsonSerializer serializer) =>
+            new PreparedRestore<TData>(Restore, SectionData.Read<TData>(data, serializer) ?? CreateDefault());
 
-        IPreparedRestore ISaveSection.PrepareDefault() => new PreparedRestore(this, CreateDefault());
+        IPreparedRestore ISaveSection.PrepareDefault() => new PreparedRestore<TData>(Restore, CreateDefault());
 
         #endregion
 
@@ -61,20 +47,6 @@ namespace SaveSystem
 
         /** <summary>The data a new game starts with.</summary> */
         protected virtual TData CreateDefault() => new TData();
-
-        private sealed class PreparedRestore : IPreparedRestore
-        {
-            private readonly SaveSection<TData> _section;
-            private readonly TData _data;
-
-            public PreparedRestore(SaveSection<TData> section, TData data)
-            {
-                _section = section;
-                _data = data;
-            }
-
-            public void Apply() => _section.Restore(_data);
-        }
 
         #endregion
     }

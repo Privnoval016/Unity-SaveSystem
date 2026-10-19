@@ -14,7 +14,7 @@ namespace SaveSystem
         Damaged,
         /** <summary>The save was written by a newer build. Nothing was restored.</summary> */
         TooNew,
-        /** <summary>A section's data could not be upgraded or read. Nothing was restored.</summary> */
+        /** <summary>A document upgrade, or a section's data, could not be upgraded or read. Nothing was restored.</summary> */
         SectionFailed,
         /** <summary>A section threw while applying its data. The other sections were restored.</summary> */
         RestoreFailed,
@@ -29,10 +29,10 @@ namespace SaveSystem
         public LoadStatus Status { get; }
 
         /** <summary>True when the save itself was damaged and its backup was loaded instead.</summary> */
-        public bool UsedBackup { get; private set; }
+        public bool UsedBackup { get; }
 
         /** <summary>What went wrong, including with the save when the backup was used; null when nothing did.</summary> */
-        public string Problem { get; private set; }
+        public string Problem { get; }
 
         /** <summary>Every section's outcome, in restore order, then the held ones.</summary> */
         public IReadOnlyList<SectionReport> Sections { get; }
@@ -45,20 +45,26 @@ namespace SaveSystem
         #region Public API
 
         /** <summary>Makes a result.</summary> */
-        public LoadResult(LoadStatus status, IReadOnlyList<SectionReport> sections = null, string problem = null)
+        public LoadResult(LoadStatus status, IReadOnlyList<SectionReport> sections = null, string problem = null, bool usedBackup = false)
         {
             Status = status;
             Sections = sections ?? Array.Empty<SectionReport>();
             Problem = problem;
+            UsedBackup = usedBackup;
         }
 
-        /** <summary>Marks the result as loaded from the backup because of the given problem with the save.</summary> */
-        public LoadResult FromBackup(string saveProblem)
+        /** <summary>Loaded, or restore-failed when any section's report failed.</summary> */
+        public static LoadResult FromReports(IReadOnlyList<SectionReport> reports)
         {
-            UsedBackup = true;
-            Problem = Problem == null ? saveProblem : $"{saveProblem}; {Problem}";
-            return this;
+            string failed = null;
+            foreach (var report in reports)
+                if (report.Outcome == SectionOutcome.Failed) failed = failed == null ? report.ToString() : $"{failed}; {report}";
+            return new LoadResult(failed == null ? LoadStatus.Loaded : LoadStatus.RestoreFailed, reports, failed);
         }
+
+        /** <summary>The same result, marked as loaded from the backup because of the given problem with the save.</summary> */
+        public LoadResult FromBackup(string saveProblem) =>
+            new LoadResult(Status, Sections, Problem == null ? saveProblem : $"{saveProblem}; {Problem}", true);
 
         /** <inheritdoc /> */
         public override string ToString() => Problem == null ? Status.ToString() : $"{Status}: {Problem}";

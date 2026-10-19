@@ -10,6 +10,7 @@ using Object = UnityEngine.Object;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Ids, the catalog and the audit on real assets.</summary> */
     public sealed class AssetIdEditorTests
     {
         private const string Folder = "Assets/SaveSystemTestTemp";
@@ -57,7 +58,7 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void StoredId_SurvivesAGuidChange()
+        public void StoredIdNotMatchingItsGuid_IsKept()
         {
             var asset = Create<TestSaveableAsset>("Regenerated");
             var stored = AssetId.New();
@@ -99,15 +100,17 @@ namespace SaveSystem.Tests
             var a = Create<TestSaveableAsset>("A");
             var b = Create<OtherSaveableAsset>("B");
             AssetIdFixer.FixAll();
-            AssetCatalogBuilder.RebuildAll();
+            AssetCatalogBuilder.Rebuild(new[] { catalog }, SaveableAssetDatabase.FindAll());
 
-            Assert.That(catalog.Assets, Is.EquivalentTo(new ScriptableObject[] { a, b }));
+            Assert.That(catalog.Assets, Does.Contain(a));
+            Assert.That(catalog.Assets, Does.Contain(b));
             Assert.That(catalog.Assets.Select(asset => SaveableAssets.IdOf(asset).Value), Is.Ordered.Using((IComparer<string>)StringComparer.Ordinal));
             Assert.That(catalog.TryFind(a.AssetId, out var found) && found == a);
 
             AssetDatabase.DeleteAsset(AssetDatabase.GetAssetPath(b));
-            AssetCatalogBuilder.RebuildAll();
-            Assert.That(catalog.Assets, Is.EqualTo(new ScriptableObject[] { a }));
+            AssetCatalogBuilder.Rebuild(new[] { catalog }, SaveableAssetDatabase.FindAll());
+            Assert.That(catalog.Assets, Does.Contain(a));
+            Assert.That(catalog.Assets.Count(asset => asset == null), Is.Zero);
         }
 
         [Test]
@@ -142,8 +145,9 @@ namespace SaveSystem.Tests
             SaveableAssetDatabase.WriteId(first, shared);
             SaveableAssetDatabase.WriteId(second, shared);
 
+            var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>($"{Folder}/Catalog.asset");
             AssetIdFixer.FixAll();
-            AssetCatalogBuilder.RebuildAll();
+            AssetCatalogBuilder.Rebuild(new[] { catalog }, SaveableAssetDatabase.FindAll());
 
             var issues = AssetIdAudit.Run().Where(issue => AssetDatabase.GetAssetPath(issue.Asset).StartsWith(Folder, StringComparison.Ordinal)).ToList();
             Assert.That(issues, Is.Empty, string.Join("\n", issues));

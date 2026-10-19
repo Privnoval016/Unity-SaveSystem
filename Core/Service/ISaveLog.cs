@@ -13,13 +13,18 @@ namespace SaveSystem
     /** <summary>A log that drops every message, for when no log is supplied.</summary> */
     public sealed class SilentSaveLog : ISaveLog
     {
+        #region Public API
+
         /** <summary>The shared instance.</summary> */
-        public static readonly SilentSaveLog Instance = new SilentSaveLog();
+        public static SilentSaveLog Instance { get; } = new SilentSaveLog();
 
         /** <inheritdoc /> */
         public void Warning(string message) { }
 
         /** <inheritdoc /> */
         public void Error(string message) { }
+    
+
+        #endregion
     }
 }

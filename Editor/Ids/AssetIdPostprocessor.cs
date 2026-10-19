@@ -15,6 +15,7 @@ namespace SaveSystem.EditorTools
     {
         #region Private Fields
 
+        private const string AssetExtension = ".asset";
         private static readonly HashSet<string> Pending = new HashSet<string>();
         private static bool _scheduled;
 
@@ -39,11 +40,12 @@ namespace SaveSystem.EditorTools
             _scheduled = false;
             var imported = Pending.ToList();
             Pending.Clear();
-            AssetIdFixer.FixAll(imported);
-            AssetCatalogBuilder.RebuildAll();
+            var assets = SaveableAssetDatabase.FindAll();
+            AssetIdFixer.Fix(assets, imported);
+            AssetCatalogBuilder.Rebuild(AssetCatalogBuilder.FindCatalogs(), assets);
         }
 
-        private static bool IsAssetFile(string path) => path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase);
+        private static bool IsAssetFile(string path) => path.EndsWith(AssetExtension, StringComparison.OrdinalIgnoreCase);
 
         private static bool IsCatalog(string path) => IsAssetFile(path) && AssetDatabase.GetMainAssetTypeAtPath(path) == typeof(AssetCatalog);
 
@@ -53,16 +55,25 @@ namespace SaveSystem.EditorTools
     /** <summary>Before every build: fixes ids, rebuilds catalogs, and fails the build if ids are still shared or missing.</summary> */
     public sealed class AssetIdBuildCheck : IPreprocessBuildWithReport
     {
+        #region Properties
+
         /** <inheritdoc /> */
         public int callbackOrder => 0;
+
+        #endregion
+
+        #region Public API
 
         /** <inheritdoc /> */
         public void OnPreprocessBuild(BuildReport report)
         {
-            AssetIdFixer.FixAll();
-            AssetCatalogBuilder.RebuildAll();
+            var assets = SaveableAssetDatabase.FindAll();
+            AssetIdFixer.Fix(assets);
+            AssetCatalogBuilder.Rebuild(AssetCatalogBuilder.FindCatalogs(), assets);
             var blocking = AssetIdAudit.Run().Where(issue => issue.Problem != AssetIdProblem.NotInCatalog).ToList();
             if (blocking.Count > 0) throw new BuildFailedException("Save: asset id problems: " + string.Join("; ", blocking));
         }
+
+        #endregion
     }
 }

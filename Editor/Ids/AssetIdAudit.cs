@@ -49,6 +49,8 @@ namespace SaveSystem.EditorTools
     /** <summary>Checks every saveable asset: one id field, an id, a unique id, and listed in every catalog.</summary> */
     public static class AssetIdAudit
     {
+        #region Public API
+
         /** <summary>Runs the audit.</summary> */
         public static List<AssetIdIssue> Run()
         {
@@ -72,6 +74,10 @@ namespace SaveSystem.EditorTools
             return issues;
         }
 
+        #endregion
+
+        #region Helpers
+
         [MenuItem("Tools/Save System/Audit Asset Ids")]
         private static void RunFromMenu()
         {
@@ -80,5 +86,7 @@ namespace SaveSystem.EditorTools
             foreach (var issue in issues)
                 Debug.LogWarning($"Save: {issue}", issue.Asset);
         }
+
+        #endregion
     }
 }

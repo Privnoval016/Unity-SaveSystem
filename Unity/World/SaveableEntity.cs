@@ -29,9 +29,14 @@ namespace SaveSystem
         /** <summary>Raised by <see cref="Despawn" /> before the object is destroyed.</summary> */
         public event Action<SaveableEntity> OnDespawned = delegate { };
 
+        /** <summary>Raised when the object is destroyed any other way, such as its scene unloading, while its components still answer.</summary> */
+        public event Action<SaveableEntity> OnDestroyed = delegate { };
+
         #endregion
 
         #region MonoBehaviour Callbacks
+
+        private void OnDestroy() => OnDestroyed(this);
 
 #if UNITY_EDITOR
         private void OnValidate()
@@ -43,7 +48,7 @@ namespace SaveSystem
                 EditorUtility.SetDirty(this);
                 return;
             }
-            if (string.IsNullOrEmpty(entityId) || IsSharedInLoadedScenes()) AssignNewId();
+            if (string.IsNullOrEmpty(entityId) || IsSharedInItsScene()) AssignNewId();
         }
 #endif
 
@@ -55,6 +60,7 @@ namespace SaveSystem
         public void Despawn()
         {
             OnDespawned(this);
+            OnDestroyed = delegate { };
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);
         }
@@ -74,10 +80,10 @@ namespace SaveSystem
         #region Helpers
 
 #if UNITY_EDITOR
-        private bool IsSharedInLoadedScenes()
+        private bool IsSharedInItsScene()
         {
             foreach (var other in FindObjectsByType<SaveableEntity>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (other != this && string.Equals(other.entityId, entityId, StringComparison.Ordinal)) return true;
+                if (other != this && other.gameObject.scene == gameObject.scene && string.Equals(other.entityId, entityId, StringComparison.Ordinal)) return true;
             return false;
         }
 #endif

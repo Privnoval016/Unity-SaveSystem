@@ -7,6 +7,7 @@ using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
+    /** <summary>Frozen save files from each version still load to the expected state.</summary> */
     public sealed class FixtureTests
     {
         public sealed class HealthData

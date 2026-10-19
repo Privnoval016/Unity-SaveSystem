@@ -1,10 +1,21 @@
 using System;
+using System.Collections.Generic;
 
 namespace SaveSystem
 {
     /** <summary>The rules for section keys and storage entry names, which are written to disk and never change.</summary> */
     public static class SaveNames
     {
+        #region Private Fields
+
+        private static readonly HashSet<string> WindowsDeviceNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+            "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+        };
+
+        #endregion
+
         #region Properties
 
         /** <summary>The longest key or entry name allowed.</summary> */
@@ -30,12 +41,14 @@ namespace SaveSystem
         }
 
         /**
-         * <summary>Lower-case letters, digits, '.', '_' and '-', not starting with '.', not ending in a reserved suffix
-         * (<c>.tmp</c>, <c>.bak</c>); at most <see cref="MaxLength" />.</summary>
+         * <summary>Lower-case letters, digits, '.', '_' and '-', not starting or ending with '.', not ending in a reserved
+         * suffix (<c>.tmp</c>, <c>.bak</c>), not a Windows device name (<c>con</c>, <c>nul</c>, <c>com1</c>, ...); at most
+         * <see cref="MaxLength" />.</summary>
          */
         public static bool IsValidEntryName(string name)
         {
-            if (!HasValidLength(name) || name[0] == '.' || name.Contains("..") || HasReservedSuffix(name)) return false;
+            if (!HasValidLength(name) || name[0] == '.' || name[name.Length - 1] == '.' || name.Contains("..") || HasReservedSuffix(name)) return false;
+            if (IsWindowsDeviceName(name)) return false;
             foreach (var c in name)
                 if (!IsNameCharacter(c)) return false;
             return true;
@@ -48,6 +61,12 @@ namespace SaveSystem
         #endregion
 
         #region Helpers
+
+        private static bool IsWindowsDeviceName(string name)
+        {
+            var dot = name.IndexOf('.');
+            return WindowsDeviceNames.Contains(dot < 0 ? name : name.Substring(0, dot));
+        }
 
         private static bool HasValidLength(string value) => !string.IsNullOrEmpty(value) && value.Length <= MaxLength;
 

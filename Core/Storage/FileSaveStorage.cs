@@ -4,13 +4,7 @@ using System.IO;
 
 namespace SaveSystem
 {
-    /**
-     * <summary>Stores each entry as a file in one folder.</summary>
-     * <remarks>
-     * A write goes to <c>name.tmp</c>, flushed to disk; the current file then becomes <c>name.bak</c> and the temporary
-     * file takes its place. A crash before the swap leaves the old file; a crash during it leaves the backup.
-     * </remarks>
-     */
+    /** <summary>Stores each entry as a file in one folder, written through a temporary file and keeping a <c>.bak</c>.</summary> */
     public sealed class FileSaveStorage : ISaveStorage
     {
         #region Properties
@@ -49,12 +43,22 @@ namespace SaveSystem
                 stream.Flush(true);
             }
 
+            var movedToBackup = false;
             if (File.Exists(path))
             {
-                if (File.Exists(backup)) File.Delete(backup);
+                DeleteIfExists(backup);
                 File.Move(path, backup);
+                movedToBackup = true;
             }
-            File.Move(temp, path);
+            try
+            {
+                File.Move(temp, path);
+            }
+            catch (Exception)
+            {
+                if (movedToBackup && !File.Exists(path)) File.Move(backup, path);
+                throw;
+            }
         }
 
         /** <inheritdoc /> */
@@ -66,18 +70,18 @@ namespace SaveSystem
             DeleteIfExists(path + SaveNames.TempSuffix);
         }
 
-        /** <inheritdoc /> */
+        /** <inheritdoc /> <remarks>An entry left with only its backup, by a write cut short, is listed too.</remarks> */
         public IReadOnlyList<string> List()
         {
-            var names = new List<string>();
-            if (!Directory.Exists(Root)) return names;
+            var names = new SortedSet<string>(StringComparer.Ordinal);
+            if (!Directory.Exists(Root)) return new List<string>();
             foreach (var path in Directory.GetFiles(Root))
             {
                 var name = Path.GetFileName(path);
+                if (name.EndsWith(SaveNames.BackupSuffix, StringComparison.Ordinal)) name = name.Substring(0, name.Length - SaveNames.BackupSuffix.Length);
                 if (SaveNames.IsValidEntryName(name)) names.Add(name);
             }
-            names.Sort(StringComparer.Ordinal);
-            return names;
+            return new List<string>(names);
         }
 
         #endregion
@@ -94,7 +98,9 @@ namespace SaveSystem
 
         private static void DeleteIfExists(string path)
         {
-            if (File.Exists(path)) File.Delete(path);
+            if (!File.Exists(path)) return;
+            File.SetAttributes(path, FileAttributes.Normal);
+            File.Delete(path);
         }
 
         #endregion

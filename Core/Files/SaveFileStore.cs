@@ -78,12 +78,22 @@ namespace SaveSystem
             _codec = codec ?? SaveFileCodec.Plain;
         }
 
-        /** <summary>Encodes and writes JSON to an entry. The JSON is only read, so it may be shared with no other writer.</summary> */
+        /**
+         * <summary>Encodes and writes JSON to an entry. The JSON is only read, so it may be shared with no other writer.</summary>
+         * <remarks>
+         * JSON nested deeper than <see cref="SaveSerializer.MaxDepth" /> is refused, since it could not be read back. When
+         * the current entry is damaged and its backup is good, the backup is kept as the backup instead of the damage.
+         * </remarks>
+         */
         public SaveResult Write(string entry, JToken json)
         {
+            if (SaveSerializer.DepthOf(json) > SaveSerializer.MaxDepth)
+                return new SaveResult(SaveStatus.WriteFailed, $"Writing '{entry}' failed: the data nests deeper than {SaveSerializer.MaxDepth} levels.");
             try
             {
-                Storage.Write(entry, _codec.Encode(_serializer.ToBytes(json, _codec.WritesPlainText)));
+                var file = _codec.Encode(_serializer.ToBytes(json, _codec.WritesPlainText));
+                KeepGoodBackup(entry);
+                Storage.Write(entry, file);
                 return new SaveResult(SaveStatus.Saved, savedTo: entry);
             }
             catch (Exception e)
@@ -132,6 +142,14 @@ namespace SaveSystem
         #endregion
 
         #region Helpers
+
+        private void KeepGoodBackup(string entry)
+        {
+            var current = Storage.Read(entry);
+            if (current == null || _codec.Decode(current).Status == DecodeStatus.Ok) return;
+            var backup = Storage.ReadBackup(entry);
+            if (backup != null && _codec.Decode(backup).Status == DecodeStatus.Ok) Storage.Write(entry, backup);
+        }
 
         private static byte[] TryRead(Func<byte[]> read, string what, List<string> problems)
         {
