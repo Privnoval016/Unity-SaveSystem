@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using UnityEngine;
 
 namespace SaveSystem.Tests
 {
@@ -10,7 +11,7 @@ namespace SaveSystem.Tests
 
         public TestFolder(string name = "saves")
         {
-            Root = Path.GetFullPath(Path.Combine("Temp", "SaveSystemTests", Guid.NewGuid().ToString("N"), name));
+            Root = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", "SaveSystemTests", Guid.NewGuid().ToString("N"), name));
         }
 
         public string FileIn(string name) => Path.Combine(Root, name);

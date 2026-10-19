@@ -146,9 +146,9 @@ namespace SaveSystem
         private void KeepGoodBackup(string entry)
         {
             var current = Storage.Read(entry);
-            if (current == null || _codec.Decode(current).Status == DecodeStatus.Ok) return;
+            if (current == null || SaveFileCodec.Verify(current) == DecodeStatus.Ok) return;
             var backup = Storage.ReadBackup(entry);
-            if (backup != null && _codec.Decode(backup).Status == DecodeStatus.Ok) Storage.Write(entry, backup);
+            if (backup != null && SaveFileCodec.Verify(backup) == DecodeStatus.Ok) Storage.Write(entry, backup);
         }
 
         private static byte[] TryRead(Func<byte[]> read, string what, List<string> problems)

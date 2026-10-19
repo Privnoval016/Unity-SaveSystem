@@ -45,11 +45,21 @@ namespace SaveSystem
         private SaveDocument(int format) => Format = format;
 
         /** <summary>Writes the document as a JSON tree. Section data is copied, so the tree is independent of this document.</summary> */
-        public JObject ToJson()
+        public JObject ToJson() => ToJson(true);
+
+        /**
+         * <summary>Writes the document as a JSON tree.</summary>
+         * <param name="copySectionData">False to use section data as it is, for a document just captured and used once.</param>
+         */
+        public JObject ToJson(bool copySectionData)
         {
             var sections = new JObject();
             foreach (var pair in Sections)
-                sections[pair.Key] = new JObject { [VersionProperty] = pair.Value.Version, [DataProperty] = pair.Value.Data.DeepClone() };
+                sections[pair.Key] = new JObject
+                {
+                    [VersionProperty] = pair.Value.Version,
+                    [DataProperty] = copySectionData || pair.Value.Data.Parent != null ? pair.Value.Data.DeepClone() : pair.Value.Data,
+                };
 
             var json = new JObject { [FormatProperty] = Format };
             if (Meta != null) json[MetaProperty] = Meta.DeepClone();

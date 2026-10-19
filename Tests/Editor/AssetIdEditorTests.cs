@@ -31,6 +31,12 @@ namespace SaveSystem.Tests
             return asset;
         }
 
+        private static void WriteAndSave(Object asset, AssetId id)
+        {
+            SaveableAssetDatabase.WriteId(asset, id);
+            AssetDatabase.SaveAssetIfDirty(asset);
+        }
+
         private static string GuidOf(Object asset) => AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
 
         [Test]
@@ -62,8 +68,7 @@ namespace SaveSystem.Tests
         {
             var asset = Create<TestSaveableAsset>("Regenerated");
             var stored = AssetId.New();
-            SaveableAssetDatabase.WriteId(asset, stored);
-            AssetDatabase.SaveAssetIfDirty(asset);
+            WriteAndSave(asset, stored);
 
             AssetIdFixer.FixAll(new[] { AssetDatabase.GetAssetPath(asset) });
             Assert.That(asset.AssetId, Is.EqualTo(stored));
@@ -121,14 +126,14 @@ namespace SaveSystem.Tests
             var first = Create<TestSaveableAsset>("First");
             var second = Create<TestSaveableAsset>("Second");
             var shared = AssetId.New();
-            SaveableAssetDatabase.WriteId(first, shared);
-            SaveableAssetDatabase.WriteId(second, shared);
+            WriteAndSave(first, shared);
+            WriteAndSave(second, shared);
             var twoFields = Create<TwoIdFieldsAsset>("TwoFields");
 
             var issues = AssetIdAudit.Run().Where(issue => AssetDatabase.GetAssetPath(issue.Asset).StartsWith(Folder, StringComparison.Ordinal)).ToList();
 
             Assert.That(issues.Any(issue => issue.Problem == AssetIdProblem.Missing && issue.Asset == missing));
-            Assert.That(issues.Count(issue => issue.Problem == AssetIdProblem.Duplicate), Is.EqualTo(2));
+            Assert.That(issues.Count(issue => issue.Problem == AssetIdProblem.Duplicate), Is.EqualTo(2), string.Join(", ", issues));
             Assert.That(issues.Any(issue => issue.Problem == AssetIdProblem.NoSingleIdField && issue.Asset == twoFields));
             Assert.That(issues.Any(issue => issue.Problem == AssetIdProblem.NotInCatalog && issue.Asset == first));
             Assert.That(catalog.Assets, Is.Empty);
@@ -142,8 +147,8 @@ namespace SaveSystem.Tests
             var first = Create<TestSaveableAsset>("First");
             var second = Create<TestSaveableAsset>("Second");
             var shared = AssetId.New();
-            SaveableAssetDatabase.WriteId(first, shared);
-            SaveableAssetDatabase.WriteId(second, shared);
+            WriteAndSave(first, shared);
+            WriteAndSave(second, shared);
 
             var catalog = AssetDatabase.LoadAssetAtPath<AssetCatalog>($"{Folder}/Catalog.asset");
             AssetIdFixer.FixAll();

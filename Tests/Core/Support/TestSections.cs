@@ -17,7 +17,6 @@ namespace SaveSystem.Tests
 
         private readonly string _key;
         private readonly int _version;
-        private readonly int _order;
         private readonly SectionUpgrade[] _upgrades;
 
         #endregion
@@ -34,18 +33,16 @@ namespace SaveSystem.Tests
 
         public override string Key => _key;
         public override int Version => _version;
-        public override int RestoreOrder => _order;
         public override IReadOnlyList<SectionUpgrade> Upgrades => _upgrades;
 
         #endregion
 
         #region Public API
 
-        public CounterSection(string key, int version = 1, int order = 0, params SectionUpgrade[] upgrades)
+        public CounterSection(string key, int version = 1, params SectionUpgrade[] upgrades)
         {
             _key = key;
             _version = version;
-            _order = order;
             _upgrades = upgrades;
         }
 

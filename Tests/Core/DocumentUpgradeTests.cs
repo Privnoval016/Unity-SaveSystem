@@ -122,11 +122,34 @@ namespace SaveSystem.Tests
 
             var result = service.Restore(document);
 
-            Assert.That(result.Status, Is.EqualTo(LoadStatus.SectionFailed));
+            Assert.That(result.Status, Is.EqualTo(LoadStatus.UpgradeFailed));
             Assert.That(result.Problem, Does.Contain("broken"));
             Assert.That(party.Value, Is.EqualTo(50));
             Assert.That(document.Sections.ContainsKey("party"));
             Assert.That(document.AppliedUpgrades, Is.Empty);
+        }
+
+        [TestCase("Bad Key")]
+        [TestCase("")]
+        public void UpgradeLeavingAnInvalidKey_FailsTheLoad_InsteadOfWritingAnUnreadableSave(string key)
+        {
+            var service = new SaveService();
+            service.AddDocumentUpgrade(new DocumentUpgrade("bad-rename", document =>
+            {
+                document.Sections[key] = document.Sections["party"];
+                document.Sections.Remove("party");
+            }));
+            var result = service.Restore(OldSave());
+            Assert.That(result.Status, Is.EqualTo(LoadStatus.UpgradeFailed));
+            Assert.That(service.HeldKeys, Is.Empty);
+        }
+
+        [Test]
+        public void UpgradeLeavingAVersionBelowOne_FailsTheLoad()
+        {
+            var service = new SaveService();
+            service.AddDocumentUpgrade(new DocumentUpgrade("bad-version", document => document.Sections["party"] = new SectionRecord(0, new JObject())));
+            Assert.That(service.Restore(OldSave()).Status, Is.EqualTo(LoadStatus.UpgradeFailed));
         }
 
         [Test]

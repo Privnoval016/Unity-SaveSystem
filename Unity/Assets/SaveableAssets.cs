@@ -19,7 +19,6 @@ namespace SaveSystem
             id = IdOf(asset);
             return !id.IsEmpty;
         }
-    
 
         #endregion
     }

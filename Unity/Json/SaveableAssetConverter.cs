@@ -34,7 +34,7 @@ namespace SaveSystem
         public SaveableAssetConverter(IAssetResolver assets, ISaveLog log = null)
         {
             _assets = assets ?? throw new ArgumentNullException(nameof(assets));
-            _log = log ?? new UnitySaveLog();
+            _log = log ?? UnitySaveLog.Instance;
         }
 
         /** <inheritdoc /> */

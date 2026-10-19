@@ -5,17 +5,13 @@ using Newtonsoft.Json.Linq;
 
 namespace SaveSystem
 {
-    /** <summary>How a scene section restores and where it reports problems.</summary> */
+    /** <summary>Where a scene section reports problems.</summary> */
     public sealed class SceneSectionOptions
     {
         #region Properties
 
-        /** <summary>When the scene restores relative to other sections.</summary> */
-        public int RestoreOrder { get; set; }
-
         /** <summary>Where problems go.</summary> */
-        public ISaveLog Log { get; set; } = new UnitySaveLog();
-    
+        public ISaveLog Log { get; set; } = UnitySaveLog.Instance;
 
         #endregion
     }
@@ -61,9 +57,6 @@ namespace SaveSystem
         public int Version => 1;
 
         /** <inheritdoc /> */
-        public int RestoreOrder { get; }
-
-        /** <inheritdoc /> */
         public IReadOnlyList<SectionUpgrade> Upgrades => SectionUpgrade.None;
 
         /** <summary>The ids of entities despawned in this scene.</summary> */
@@ -78,13 +71,12 @@ namespace SaveSystem
          * <param name="key">The section's key, such as <c>world/</c> and the scene's id.</param>
          * <param name="entities">The scene's entities. Entities with no id, or a repeated id, are skipped with a warning.</param>
          * <param name="serializer">Components are captured and read with it: the same one as the game's service.</param>
-         * <param name="options">Restore order and log.</param>
+         * <param name="options">The log.</param>
          */
         public SceneSaveSection(string key, IEnumerable<SaveableEntity> entities, SaveSerializer serializer, SceneSectionOptions options = null)
         {
             options = options ?? new SceneSectionOptions();
             Key = key;
-            RestoreOrder = options.RestoreOrder;
             _log = options.Log ?? SilentSaveLog.Instance;
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             foreach (var entity in entities)
@@ -198,7 +190,7 @@ namespace SaveSystem
             if (!state.IsAlive) return state.LastKnown;
             try
             {
-                state.LastKnown = state.Service.Capture().ToJson();
+                state.LastKnown = state.Service.Capture().ToJson(false);
             }
             catch (SectionCaptureException e)
             {

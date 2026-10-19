@@ -6,7 +6,10 @@ namespace SaveSystem
 {
     /**
      * <summary>One system's part of a save: a stable key, a version, and how its state is captured and restored.</summary>
-     * <remarks>Most systems derive from <see cref="SaveSection{TData}" /> rather than implementing this directly.</remarks>
+     * <remarks>
+     * Sections restore in the order they were registered, so the order lives in one place: the code that registers
+     * them. Most systems derive from <see cref="SaveSection{TData}" /> rather than implementing this directly.
+     * </remarks>
      */
     public interface ISaveSection
     {
@@ -15,9 +18,6 @@ namespace SaveSystem
 
         /** <summary>The version of the data this section writes, from 1.</summary> */
         int Version { get; }
-
-        /** <summary>Sections restore in ascending order; equal orders restore in registration order.</summary> */
-        int RestoreOrder { get; }
 
         /** <summary>The steps that bring older data up to <see cref="Version" />, one per older version.</summary> */
         IReadOnlyList<SectionUpgrade> Upgrades { get; }

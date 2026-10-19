@@ -170,9 +170,9 @@ namespace SaveSystem.Tests
         public async Task SlotHeader_RecordsItsFormat()
         {
             var storage = new MemorySaveStorage();
-            var slots = new SaveSlots<object>(new SaveService(), storage, null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(new SaveService(), storage, null, new SlotOptions(new ImmediateSaveWorker()));
             await slots.SaveAsync(SlotId.Manual(1));
-            Assert.That((await slots.ListAsync()).Single().Header.Format, Is.EqualTo(SlotHeader<object>.CurrentFormat));
+            Assert.That((await slots.ListAsync()).Single().Header.Format, Is.EqualTo(SlotHeaderFields.CurrentFormat));
             Assert.That(Encoding.UTF8.GetString(storage.Read("manual-01.head")), Does.Contain("\"format\": 1"));
         }
 
@@ -180,7 +180,7 @@ namespace SaveSystem.Tests
         public async Task SaveCopiedToAnotherSlot_GetsAHeaderForItsNewSlotOnLoad()
         {
             var storage = new MemorySaveStorage();
-            var slots = new SaveSlots<object>(new SaveService(), storage, null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(new SaveService(), storage, null, new SlotOptions(new ImmediateSaveWorker()));
             await slots.SaveAsync(SlotId.Manual(1));
             storage.Overwrite("manual-02.save", storage.Read("manual-01.save"));
 
@@ -192,7 +192,7 @@ namespace SaveSystem.Tests
         [Test]
         public void EveryOperation_RejectsAMissingSlot()
         {
-            var slots = new SaveSlots<object>(new SaveService(), new MemorySaveStorage(), null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(new SaveService(), new MemorySaveStorage(), null, new SlotOptions(new ImmediateSaveWorker()));
             Assert.Throws<ArgumentException>(() => slots.LoadAsync(default));
             Assert.Throws<ArgumentException>(() => slots.DeleteAsync(default));
             Assert.Throws<ArgumentException>(() => slots.RepairHeaderAsync(default));
@@ -201,14 +201,14 @@ namespace SaveSystem.Tests
         [Test]
         public async Task ListingStorageThatThrows_ListsNothing()
         {
-            var slots = new SaveSlots<object>(new SaveService(), new BrokenListStorage(), null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(new SaveService(), new BrokenListStorage(), null, new SlotOptions(new ImmediateSaveWorker()));
             Assert.That(await slots.ListAsync(), Is.Empty);
         }
 
         [Test]
         public async Task RepairHeader_WithNoSave_ReturnsFalse()
         {
-            var slots = new SaveSlots<object>(new SaveService(), new MemorySaveStorage(), null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(new SaveService(), new MemorySaveStorage(), null, new SlotOptions(new ImmediateSaveWorker()));
             Assert.That(await slots.RepairHeaderAsync(SlotId.Manual(1)), Is.False);
         }
 
@@ -219,7 +219,7 @@ namespace SaveSystem.Tests
             var service = new SaveService();
             var volume = new CounterSection("audio") { Value = 1 };
             service.Register(volume);
-            var store = new SettingsStore(service, storage, new SaveFileOptions { Worker = new ImmediateSaveWorker() });
+            var store = new SettingsStore(service, storage, new SaveFileOptions(new ImmediateSaveWorker()));
             await store.SaveAsync();
             volume.Value = 2;
             await store.SaveAsync();
@@ -235,7 +235,7 @@ namespace SaveSystem.Tests
         public async Task SettingsWriteFailure_IsReported()
         {
             var storage = new SpyStorage { FailWrite = _ => true };
-            var store = new SettingsStore(new SaveService(), storage, new SaveFileOptions { Worker = new ImmediateSaveWorker() });
+            var store = new SettingsStore(new SaveService(), storage, new SaveFileOptions(new ImmediateSaveWorker()));
             Assert.That((await store.SaveAsync()).Status, Is.EqualTo(SaveStatus.WriteFailed));
         }
 

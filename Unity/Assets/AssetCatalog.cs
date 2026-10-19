@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace SaveSystem
 {
@@ -41,17 +42,18 @@ namespace SaveSystem
         #region Public API
 
         /** <inheritdoc /> */
-        public bool TryFind(AssetId id, out ScriptableObject asset)
+        public bool TryFind(AssetId id, out Object asset)
         {
             if (_byId == null) _byId = BuildIndex();
-            return _byId.TryGetValue(id, out asset) && asset != null;
+            asset = _byId.TryGetValue(id, out var found) && found != null ? found : null;
+            return asset != null;
         }
 
         /**
          * <summary>Replaces the listed assets. Called by the editor's catalog builder.</summary>
          * <returns>True when the list changed.</returns>
          */
-        public bool SetAssets(IReadOnlyList<ScriptableObject> sorted)
+        internal bool SetAssets(IReadOnlyList<ScriptableObject> sorted)
         {
             if (sorted == null) throw new ArgumentNullException(nameof(sorted));
             var changed = sorted.Count != assets.Count;

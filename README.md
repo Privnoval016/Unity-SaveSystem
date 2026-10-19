@@ -53,7 +53,8 @@ public sealed class InventorySection : SaveSection<InventoryData>
 - **`Capture` must return a snapshot** that shares no lists with live state.
 - **`CreateDefault`** gives a new game's state. A save with no data for the section restores this, which covers
   a new game and a system added after the save was made.
-- **`RestoreOrder`** orders sections that depend on each other: lower restores first.
+- **Sections restore in the order they are registered**, so the order lives in one place: the code that
+  registers them. Register a section that depends on another after it.
 
 **Rules for data classes:**
 
@@ -72,7 +73,8 @@ var service = new SaveService(UnitySave.CreateSerializer(assetCatalog), new Unit
 service.Register(new InventorySection(inventory));
 ```
 
-- **A duplicate key throws, as does an invalid key, version or upgrade.** That is a bug, so it fails loudly.
+- **A duplicate key throws, as does an invalid key or version, or upgrades that don't cover every older
+  version.** That is a bug, so it fails loudly at startup rather than when an old save loads.
 - **When a section registers and data is held for it, it is restored at once.** If that data can't be used, or the
   restore throws, the section is not registered, the data stays held, and the result says why.
 - **Unregistering keeps the section's current state held.** It goes into the next save, and the section is
@@ -100,7 +102,7 @@ Every load returns a `LoadResult`:
 
 | Field | What it holds |
 |---|---|
-| `Status` | `Loaded`, `Missing`, `Damaged`, `TooNew`, `SectionFailed` or `RestoreFailed` |
+| `Status` | `Loaded`, `Missing`, `Damaged`, `TooNew`, `SectionFailed`, `UpgradeFailed` (a whole-save upgrade) or `RestoreFailed` |
 | `UsedBackup` | True when the save was damaged and its backup was loaded instead |
 | `Problem` | What went wrong |
 | `Sections` | What happened to each section: restored, upgraded, defaulted, held or failed |
@@ -149,13 +151,17 @@ service.AddDocumentUpgrade(new DocumentUpgrade("party-to-roster", document =>
 - **Each save records the ids of the upgrades it has had**, so an upgrade never runs twice on one save. A new
   save records every upgrade, since its data is already current.
 - **Ids are permanent.** Never change or reuse one.
-- **Upgrades run on a copy, in the order added.** One that throws fails the load and changes nothing.
+- **Upgrades run on a copy, in the order added.** One that throws, or leaves the save invalid (a bad key or
+  version), fails the load and changes nothing.
 
 ## Slots, autosaves and settings
 
 ```csharp
+var worker = UnitySave.CreateWorker();      // one for the whole game
+UnitySave.FlushOnQuit(worker, TimeSpan.FromSeconds(5));
 var slots = new SaveSlots<SlotInfo>(service, new FileSaveStorage(UnitySave.SavesFolder), CaptureSlotInfo,
-    new SlotOptions { Worker = worker, AutosaveCount = 3 });
+    new SlotOptions(worker) { AutosaveCount = 3, Log = UnitySaveLog.Instance });
+var settings = new SettingsStore(settingsService, new FileSaveStorage(UnitySave.SettingsFolder), new SaveFileOptions(worker));
 
 await slots.SaveAsync(SlotId.Manual(1));
 await slots.AutosaveAsync();                 // the empty or oldest of auto-01..auto-03
@@ -182,7 +188,8 @@ await slots.DeleteAsync(SlotId.Manual(1));
   and engine converters.
 - **Autosaves rotate by sequence number, not by the clock**, so a changed system clock can't make the newest
   autosave look oldest. When a header is lost, the sequence comes from the copy inside the save.
-- **Share one worker** between the slots and the settings, so one flush waits for both.
+- **The worker is required, and shared.** Give the slots and the settings the same one, so one flush waits for
+  both. Use `UnitySave.CreateWorker()`, which picks the right worker for WebGL.
 - **Settings are separate:** a `SettingsStore` with its own `SaveService` and its own folder
   (`UnitySave.SettingsFolder`), so deleting every slot never touches them.
 - **On quit**, `UnitySave.FlushOnQuit(worker, timeout)` waits for writes still in progress.
@@ -282,6 +289,10 @@ it to `CreateSerializer`. The editor keeps it filled:
 
 The catalog references every saveable asset, so they load with it.
 
+**It keeps up as the game grows.** Each import loads only the changed files and those sharing their ids, and the
+project is scanned once per session. When a type becomes saveable (`ISaveableAsset` added to it), its existing
+assets get ids automatically after the next compile.
+
 **The audit checks every saveable asset** (*Tools > Save System > Audit Asset Ids*):
 
 - it has exactly one id field;
@@ -291,12 +302,16 @@ The catalog references every saveable asset, so they load with it.
 
 A build fails if any id is still missing or shared after the automatic fix.
 
+The resolver accepts any Unity object, so a resolver that loads assets by id on demand (through Addressables, say)
+can replace the catalog when there are too many heavy assets to keep loaded. That needs no change to saves.
+
 ## World objects
 
 For things in a scene that remember their state, such as chests, doors, levers and pickups:
 
 1. **Add a `SaveableScene`** to each scene that saves. It takes its id from the scene's GUID. A scene copied from
-   another needs *New Scene Id* from its context menu.
+   another needs *New Scene Id* from its context menu. *Tools > Save System > Audit Scene Ids* finds copies
+   sharing an id, and scenes with entities but no `SaveableScene`. A build fails on a shared or missing id.
 2. **Add a `SaveableEntity`** to each object that saves. The editor gives each one an id that is unique in the
    scene, and a duplicated object gets a new id.
 3. **Write its saved components** as `SaveableComponent<TData>`, with a key, plus a version and upgrades if they
@@ -321,7 +336,8 @@ service.Unregister(section); // holds the scene's state until it loads again
 - **Reload a scene before loading a save into it.** A scene section restores saved state, but it can't undo what
   happened in the scene since it loaded, such as a chest opened or a pickup taken.
 - **Only objects placed in the scene are saved.** Objects spawned at runtime belong in a system's own section.
-- **`CreateSection(serializer, options)`** takes a `SceneSectionOptions` with the restore order and the log.
+- **`CreateSection(serializer, options)`** takes a `SceneSectionOptions` with the log.
+- **Two saved components with the same key on one entity** log an error in the editor: give each its own key.
 
 ## Tools
 
@@ -330,11 +346,29 @@ service.Unregister(section); // holds the scene's state until it loads again
 | Tool | What it does |
 |---|---|
 | **Save Browser** | Lists the saves and settings in a folder. Shows each section's version and data. Edits a section and writes the save back with a fresh checksum (the old file becomes the backup). Deletes a save and its header. Opens the folder |
+| **Fix Asset Ids** | Gives every saveable asset missing or sharing an id its own |
 | **Rebuild Asset Catalog** | Fills every catalog now |
-| **Audit Asset Ids** | Logs every id problem |
+| **Audit Asset Ids** | Logs every asset id problem |
+| **Audit Scene Ids** | Logs every scene id problem, reading scene files without opening them |
 
 The browser reads plain and gzip saves. Code that opens `SaveBrowserModel` itself can pass the AES transforms the
 game uses, to read encrypted saves as well. Deleting asks inside the window, never in a dialog.
+
+## Scale
+
+Measured in the editor on a Mac: 300 sections plus one area with 1,000 entities, each with two saved components.
+
+| Step | Time |
+|---|---|
+| Capture, on the main thread | about 60 ms (the area is 42 ms of it) |
+| Save, including the background write | about 150 ms |
+| Load, including the restore | about 220 ms |
+| File | 763 KB plain, 32 KB gzipped |
+
+- **Areas you aren't in cost nothing per save:** their data is held and reused as is.
+- **Saving costs the same however many slots there are:** the sequence number is cached, and the backup check
+  reads only the frame and checksum.
+- **The scale test** (`ScaleBenchmarks`) runs with the others and prints these numbers.
 
 ## Tests
 

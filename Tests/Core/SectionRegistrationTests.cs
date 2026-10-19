@@ -64,21 +64,21 @@ namespace SaveSystem.Tests
         [Test]
         public void UpgradeNotBelowVersion_Throws()
         {
-            var section = new CounterSection("a", 2, 0, new SectionUpgrade(2, data => data));
+            var section = new CounterSection("a", 2, new SectionUpgrade(2, data => data));
             Assert.Throws<ArgumentException>(() => new SaveService().Register(section));
         }
 
         [Test]
         public void TwoUpgradesFromOneVersion_Throws()
         {
-            var section = new CounterSection("a", 3, 0, new SectionUpgrade(1, data => data), new SectionUpgrade(1, data => data));
+            var section = new CounterSection("a", 3, new SectionUpgrade(1, data => data), new SectionUpgrade(1, data => data));
             Assert.Throws<ArgumentException>(() => new SaveService().Register(section));
         }
 
         [Test]
         public void NullUpgrade_Throws()
         {
-            Assert.Throws<ArgumentException>(() => new SaveService().Register(new CounterSection("a", 2, 0, (SectionUpgrade)null)));
+            Assert.Throws<ArgumentException>(() => new SaveService().Register(new CounterSection("a", 2, (SectionUpgrade)null)));
         }
 
         [Test]
@@ -163,33 +163,34 @@ namespace SaveSystem.Tests
             service.Register(old);
             service.Unregister(old);
 
-            var newer = new CounterSection("area", 2);
+            var newer = new CounterSection("area", 2, new SectionUpgrade(1, data => throw new InvalidOperationException("old data can't be used")));
             var report = service.Register(newer);
 
             Assert.That(report.Outcome, Is.EqualTo(SectionOutcome.Failed));
-            Assert.That(report.Problem, Does.Contain("no upgrade"));
+            Assert.That(report.Problem, Does.Contain("old data can't be used"));
             Assert.That(service.IsRegistered("area"), Is.False);
             Assert.That(service.HeldKeys, Does.Contain("area"));
             Assert.That(log.Errors, Has.Count.EqualTo(1));
         }
 
         [Test]
-        public void RestoreOrder_IsAscending_ThenRegistrationOrder()
+        public void Sections_RestoreInRegistrationOrder()
         {
             var log = new List<string>();
             var service = new SaveService();
-            foreach (var section in new[]
-                     {
-                         new CounterSection("late", order: 5), new CounterSection("first-zero"), new CounterSection("early", order: -1),
-                         new CounterSection("second-zero"),
-                     })
-            {
-                section.RestoreLog = log;
-                service.Register(section);
-            }
+            foreach (var key in new[] { "zeta", "alpha", "middle" })
+                service.Register(new CounterSection(key) { RestoreLog = log });
 
             service.Restore(service.Capture());
-            Assert.That(log, Is.EqualTo(new[] { "early", "first-zero", "second-zero", "late" }));
+            Assert.That(log, Is.EqualTo(new[] { "zeta", "alpha", "middle" }));
+        }
+
+        [Test]
+        public void UpgradesWithAGap_ThrowAtRegistration()
+        {
+            var section = new CounterSection("a", 3, new SectionUpgrade(2, data => data));
+            var error = Assert.Throws<ArgumentException>(() => new SaveService().Register(section));
+            Assert.That(error.Message, Does.Contain("no upgrade from version 1"));
         }
     }
 

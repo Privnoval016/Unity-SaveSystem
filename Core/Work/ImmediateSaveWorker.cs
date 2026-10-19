@@ -24,7 +24,6 @@ namespace SaveSystem
 
         /** <inheritdoc /> */
         public bool WaitForAll(TimeSpan timeout) => true;
-    
 
         #endregion
     }

@@ -77,11 +77,16 @@ namespace SaveSystem.EditorTools
     {
         #region Public API
 
-        /** <summary>Each asset that needs a new id, and the id it gets.</summary> */
-        public static IReadOnlyList<AssetIdChange> Plan(IReadOnlyList<AssetIdRecord> records, Func<AssetId> newRandomId = null)
+        /**
+         * <summary>Each asset that needs a new id, and the id it gets.</summary>
+         * <param name="records">The assets to plan, with every asset sharing an id with any of them.</param>
+         * <param name="isTakenElsewhere">True for an id some asset outside the records holds; null when the records are every asset.</param>
+         * <param name="newRandomId">Makes random ids; <see cref="AssetId.New" /> by default.</param>
+         */
+        public static IReadOnlyList<AssetIdChange> Plan(IReadOnlyList<AssetIdRecord> records, Func<AssetId, bool> isTakenElsewhere = null, Func<AssetId> newRandomId = null)
         {
             newRandomId = newRandomId ?? AssetId.New;
-            var taken = new HashSet<AssetId>(records.Where(record => !record.Current.IsEmpty).Select(record => record.Current));
+            var taken = new TakenIds(records.Where(record => !record.Current.IsEmpty).Select(record => record.Current), isTakenElsewhere);
             var changes = new List<AssetIdChange>();
 
             foreach (var index in NeedingIds(records))
@@ -126,13 +131,30 @@ namespace SaveSystem.EditorTools
             return ordered[0];
         }
 
-        private static AssetId PickId(AssetIdRecord record, HashSet<AssetId> taken, Func<AssetId> newRandomId)
+        private static AssetId PickId(AssetIdRecord record, TakenIds taken, Func<AssetId> newRandomId)
         {
             if (record.IsMainAsset && AssetId.TryParse(record.FileGuid, out var fromGuid) && !taken.Contains(fromGuid)) return fromGuid;
             AssetId id;
             do id = newRandomId();
             while (taken.Contains(id));
             return id;
+        }
+
+        /** <summary>The ids already in use: those in the records, those added while planning, and any held elsewhere.</summary> */
+        private sealed class TakenIds
+        {
+            private readonly HashSet<AssetId> _ids;
+            private readonly Func<AssetId, bool> _elsewhere;
+
+            public TakenIds(IEnumerable<AssetId> ids, Func<AssetId, bool> elsewhere)
+            {
+                _ids = new HashSet<AssetId>(ids);
+                _elsewhere = elsewhere ?? (_ => false);
+            }
+
+            public bool Contains(AssetId id) => _ids.Contains(id) || _elsewhere(id);
+
+            public void Add(AssetId id) => _ids.Add(id);
         }
 
         #endregion

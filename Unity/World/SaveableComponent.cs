@@ -22,9 +22,6 @@ namespace SaveSystem
         public virtual int Version => 1;
 
         /** <inheritdoc /> */
-        public virtual int RestoreOrder => 0;
-
-        /** <inheritdoc /> */
         public virtual IReadOnlyList<SectionUpgrade> Upgrades => SectionUpgrade.None;
 
         #endregion

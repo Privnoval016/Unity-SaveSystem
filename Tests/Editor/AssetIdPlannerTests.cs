@@ -103,7 +103,7 @@ namespace SaveSystem.Tests
             {
                 new AssetIdRecord("Assets/x.asset", GuidC, true, Id(GuidA), false),
                 new AssetIdRecord("Assets/x.asset", GuidC, false, default, true),
-            }, () => sequence.Dequeue());
+            }, newRandomId: () => sequence.Dequeue());
             Assert.That(changes.Single().Id, Is.EqualTo(Id(GuidB)));
         }
 

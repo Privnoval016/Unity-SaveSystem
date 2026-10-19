@@ -19,7 +19,7 @@ namespace SaveSystem.Tests
         public void Steps_RunInOrder()
         {
             var steps = new List<int>();
-            var section = new CounterSection("a", 3, 0,
+            var section = new CounterSection("a", 3,
                 new SectionUpgrade(2, data =>
                 {
                     steps.Add(2);
@@ -44,29 +44,17 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void MissingStep_FailsAndRestoresNothing()
+        public void MissingStep_IsCaughtAtRegistration_BeforeAnySaveLoads()
         {
-            var a = new CounterSection("a") { Value = 1 };
-            var b = new CounterSection("b", 3, 0, new SectionUpgrade(2, data => data)) { Value = 2 };
-            var service = new SaveService();
-            service.Register(a);
-            service.Register(b);
-            var document = DocumentWith("b", 1, new JObject { ["Value"] = 9 });
-            document.Sections["a"] = new SectionRecord(1, new JObject { ["Value"] = 50 });
-
-            var result = service.Restore(document);
-
-            Assert.That(result.Status, Is.EqualTo(LoadStatus.SectionFailed));
-            Assert.That(result.Problem, Does.Contain("no upgrade from version 1"));
-            Assert.That(a.Value, Is.EqualTo(1));
-            Assert.That(b.Value, Is.EqualTo(2));
+            var b = new CounterSection("b", 3, new SectionUpgrade(2, data => data));
+            Assert.Throws<ArgumentException>(() => new SaveService().Register(b));
         }
 
         [Test]
         public void ThrowingStep_FailsAndRestoresNothing()
         {
             var a = new CounterSection("a") { Value = 1 };
-            var b = new CounterSection("b", 2, 0, new SectionUpgrade(1, data => throw new InvalidOperationException("bad step")));
+            var b = new CounterSection("b", 2, new SectionUpgrade(1, data => throw new InvalidOperationException("bad step")));
             var service = new SaveService();
             service.Register(a);
             service.Register(b);
@@ -83,7 +71,7 @@ namespace SaveSystem.Tests
         [Test]
         public void StepReturningNothing_Fails()
         {
-            var section = new CounterSection("a", 2, 0, new SectionUpgrade(1, data => null));
+            var section = new CounterSection("a", 2, new SectionUpgrade(1, data => null));
             var service = new SaveService();
             service.Register(section);
             Assert.That(service.Restore(DocumentWith("a", 1, new JObject())).Status, Is.EqualTo(LoadStatus.SectionFailed));
@@ -95,7 +83,7 @@ namespace SaveSystem.Tests
             var a = new CounterSection("a") { Value = 1 };
             var service = new SaveService();
             service.Register(a);
-            service.Register(new CounterSection("b", 2, 0, new SectionUpgrade(1, data => data)));
+            service.Register(new CounterSection("b", 2, new SectionUpgrade(1, data => data)));
             var document = DocumentWith("b", 3, new JObject());
             document.Sections["a"] = new SectionRecord(1, new JObject { ["Value"] = 50 });
 
@@ -136,7 +124,7 @@ namespace SaveSystem.Tests
         {
             var service = new SaveService();
             service.Restore(DocumentWith("area", 1, new JObject { ["Old"] = 7 }));
-            var area = new CounterSection("area", 2, 0, new SectionUpgrade(1, data => new JObject { ["Value"] = data["Old"] }));
+            var area = new CounterSection("area", 2, new SectionUpgrade(1, data => new JObject { ["Value"] = data["Old"] }));
 
             var report = service.Register(area);
 
@@ -147,7 +135,7 @@ namespace SaveSystem.Tests
         [Test]
         public void UpgradedSection_IsSavedAtTheNewVersion()
         {
-            var section = new CounterSection("a", 2, 0, new SectionUpgrade(1, data => new JObject { ["Value"] = 5 }));
+            var section = new CounterSection("a", 2, new SectionUpgrade(1, data => new JObject { ["Value"] = 5 }));
             var service = new SaveService();
             service.Register(section);
             service.Restore(DocumentWith("a", 1, new JObject()));

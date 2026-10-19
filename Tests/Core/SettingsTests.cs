@@ -12,7 +12,7 @@ namespace SaveSystem.Tests
             var service = new SaveService();
             var volume = new CounterSection("audio") { Value = 70 };
             service.Register(volume);
-            var store = new SettingsStore(service, new MemorySaveStorage(), new SaveFileOptions { Worker = new ImmediateSaveWorker() });
+            var store = new SettingsStore(service, new MemorySaveStorage(), new SaveFileOptions(new ImmediateSaveWorker()));
 
             Assert.That((await store.SaveAsync()).Succeeded);
             volume.Value = 0;
@@ -23,7 +23,7 @@ namespace SaveSystem.Tests
         [Test]
         public async Task NoSettingsYet_IsMissing()
         {
-            var store = new SettingsStore(new SaveService(), new MemorySaveStorage(), new SaveFileOptions { Worker = new ImmediateSaveWorker() });
+            var store = new SettingsStore(new SaveService(), new MemorySaveStorage(), new SaveFileOptions(new ImmediateSaveWorker()));
             Assert.That((await store.LoadAsync()).Status, Is.EqualTo(LoadStatus.Missing));
         }
 
@@ -31,7 +31,7 @@ namespace SaveSystem.Tests
         public async Task DeletingEverySlot_LeavesSettingsAlone()
         {
             var storage = new MemorySaveStorage();
-            var options = new SlotOptions { Worker = new ImmediateSaveWorker() };
+            var options = new SlotOptions(new ImmediateSaveWorker());
             var settingsService = new SaveService();
             var volume = new CounterSection("audio") { Value = 70 };
             settingsService.Register(volume);
@@ -58,7 +58,7 @@ namespace SaveSystem.Tests
             var service = new SaveService();
             service.Register(new CounterSection("audio") { ThrowOnCapture = true });
             var storage = new MemorySaveStorage();
-            var store = new SettingsStore(service, storage, new SaveFileOptions { Worker = new ImmediateSaveWorker() });
+            var store = new SettingsStore(service, storage, new SaveFileOptions(new ImmediateSaveWorker()));
             Assert.That((await store.SaveAsync()).Status, Is.EqualTo(SaveStatus.CaptureFailed));
             Assert.That(storage.List(), Is.Empty);
         }

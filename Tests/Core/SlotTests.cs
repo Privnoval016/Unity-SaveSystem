@@ -34,7 +34,7 @@ namespace SaveSystem.Tests
 
         private SaveSlots<TestInfo> Slots(int autosaves = 3) => new SaveSlots<TestInfo>(_service, _storage,
             () => new TestInfo { Place = _place, PlaySeconds = 61.5 },
-            new SlotOptions { Worker = new ImmediateSaveWorker(), AutosaveCount = autosaves, UtcNow = () => _now });
+            new SlotOptions(new ImmediateSaveWorker()) { AutosaveCount = autosaves, UtcNow = () => _now });
 
         [Test]
         public async Task Save_ThenLoad_RestoresTheState()
@@ -69,7 +69,7 @@ namespace SaveSystem.Tests
         [Test]
         public async Task NoInfo_IsAllowed()
         {
-            var slots = new SaveSlots<TestInfo>(_service, _storage, null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<TestInfo>(_service, _storage, null, new SlotOptions(new ImmediateSaveWorker()));
             await slots.SaveAsync(SlotId.Manual(1));
             var summary = (await slots.ListAsync()).Single();
             Assert.That(summary.State, Is.EqualTo(SlotHeaderState.Ok));
@@ -305,7 +305,7 @@ namespace SaveSystem.Tests
         public async Task InfoCaptureFailure_WritesNothing()
         {
             var slots = new SaveSlots<TestInfo>(_service, _storage, () => throw new InvalidOperationException("no info"),
-                new SlotOptions { Worker = new ImmediateSaveWorker() });
+                new SlotOptions(new ImmediateSaveWorker()));
             var result = await slots.SaveAsync(SlotId.Manual(1));
             Assert.That(result.Status, Is.EqualTo(SaveStatus.CaptureFailed));
             Assert.That(_storage.List(), Is.Empty);
@@ -366,9 +366,8 @@ namespace SaveSystem.Tests
         [Test]
         public async Task EncryptedSlots_RoundTrip_AndHeadersStayPlain()
         {
-            var slots = new SaveSlots<TestInfo>(_service, _storage, () => new TestInfo { Place = "harbour" }, new SlotOptions
+            var slots = new SaveSlots<TestInfo>(_service, _storage, () => new TestInfo { Place = "harbour" }, new SlotOptions(new ImmediateSaveWorker())
             {
-                Worker = new ImmediateSaveWorker(),
                 Codec = new SaveFileCodec(new ISaveTransform[] { new GzipTransform(), new AesTransform(new byte[32]) }),
             });
             _counter.Value = 77;

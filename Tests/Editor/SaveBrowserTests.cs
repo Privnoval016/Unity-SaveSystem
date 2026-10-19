@@ -22,13 +22,13 @@ namespace SaveSystem.Tests
         }
 
         private SaveSlots<object> Slots(SaveFileCodec codec = null) =>
-            new SaveSlots<object>(_service, _storage, null, new SlotOptions { Worker = new ImmediateSaveWorker(), Codec = codec ?? SaveFileCodec.Plain });
+            new SaveSlots<object>(_service, _storage, null, new SlotOptions(new ImmediateSaveWorker()) { Codec = codec ?? SaveFileCodec.Plain });
 
         [Test]
         public async Task Lists_SavesAndSettings_ButNotHeaders()
         {
             await Slots().SaveAsync(SlotId.Manual(1));
-            await new SettingsStore(new SaveService(), _storage, new SaveFileOptions { Worker = new ImmediateSaveWorker() }).SaveAsync();
+            await new SettingsStore(new SaveService(), _storage, new SaveFileOptions(new ImmediateSaveWorker())).SaveAsync();
             Assert.That(new SaveBrowserModel(_storage).Entries(), Is.EqualTo(new[] { "manual-01.save", "settings.cfg" }));
         }
 

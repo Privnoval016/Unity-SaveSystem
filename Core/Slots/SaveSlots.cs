@@ -26,6 +26,8 @@ namespace SaveSystem
         private readonly SaveFileStore _saves;
         private readonly SaveFileStore _headers;
         private readonly SaveSerializer _plain = new SaveSerializer();
+        private readonly ISaveLog _log;
+        private long? _highestSequence;
 
         #endregion
 
@@ -38,10 +40,11 @@ namespace SaveSystem
          * <param name="captureInfo">Returns the game's header fields at the moment of saving; may be null.</param>
          * <param name="options">Worker, codec, autosave count and clock.</param>
          */
-        public SaveSlots(SaveService service, ISaveStorage storage, Func<TInfo> captureInfo, SlotOptions options = null)
+        public SaveSlots(SaveService service, ISaveStorage storage, Func<TInfo> captureInfo, SlotOptions options)
         {
             if (service == null) throw new ArgumentNullException(nameof(service));
-            _options = options ?? new SlotOptions();
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _log = options.Log ?? SilentSaveLog.Instance;
             if (_options.AutosaveCount < 1 || _options.AutosaveCount > SlotId.MaxNumber)
                 throw new ArgumentOutOfRangeException(nameof(options), $"Autosave count must be 1 to {SlotId.MaxNumber}.");
             _documents = new SaveDocumentQueue(service, _options.Worker, Queue);
@@ -121,23 +124,28 @@ namespace SaveSystem
 
         private SaveResult WriteSlot(SlotId slot, SaveDocument document, JToken info)
         {
-            var header = new SlotHeader<JToken> { Slot = slot.Name, Sequence = NextSequence(), SavedAtUtc = _options.UtcNow(), Info = info };
+            var sequence = NextSequence();
+            var header = new SlotHeader<JToken> { Slot = slot.Name, Sequence = sequence, SavedAtUtc = _options.UtcNow(), Info = info };
             var headerJson = JObject.FromObject(header, _plain.Json);
             document.Meta = headerJson;
 
             var saved = _saves.Write(SlotEntries.Save(slot), document.ToJson());
             if (!saved.Succeeded) return saved;
+            _highestSequence = sequence;
 
             var headed = WriteHeader(slot, headerJson);
+            if (!headed.Succeeded) _headers.Delete(SlotEntries.Header(slot));
             return new SaveResult(SaveStatus.Saved, headed.Problem, slot.Name);
         }
 
-        private SaveResult WriteHeader(SlotId slot, JObject meta)
+        private static JObject HeaderFor(SlotId slot, JObject meta)
         {
             var header = (JObject)meta.DeepClone();
-            header[SlotHeader<TInfo>.SlotProperty] = slot.Name;
-            return _headers.Write(SlotEntries.Header(slot), header);
+            header[SlotHeaderFields.Slot] = slot.Name;
+            return header;
         }
+
+        private SaveResult WriteHeader(SlotId slot, JObject meta) => _headers.Write(SlotEntries.Header(slot), HeaderFor(slot, meta));
 
         private ReadResult<SaveDocument> ReadSlot(SlotId slot)
         {
@@ -149,8 +157,7 @@ namespace SaveSystem
         private void RefreshHeader(SlotId slot, JObject meta)
         {
             var current = _headers.Read(SlotEntries.Header(slot), json => json);
-            var expected = (JObject)meta.DeepClone();
-            expected[SlotHeader<TInfo>.SlotProperty] = slot.Name;
+            var expected = HeaderFor(slot, meta);
             if (current.Status != ReadStatus.Ok || current.UsedBackup || !JToken.DeepEquals(current.Value, expected))
                 _headers.Write(SlotEntries.Header(slot), expected);
         }
@@ -169,8 +176,9 @@ namespace SaveSystem
             {
                 return _saves.Storage.List();
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _log.Error($"Save: listing slots failed: {e.Message}");
                 return Array.Empty<string>();
             }
         }
@@ -194,6 +202,8 @@ namespace SaveSystem
             var header = json.ToObject<SlotHeader<TInfo>>(_plain.Json);
             if (header == null || !string.Equals(header.Slot, slot.Name, StringComparison.Ordinal))
                 throw new FormatException($"The header is not for slot '{slot.Name}'.");
+            if (header.Format < 1 || header.Format > SlotHeaderFields.CurrentFormat)
+                throw new FormatException($"Header format {header.Format} is not one this code reads.");
             return header;
         }
 
@@ -201,16 +211,20 @@ namespace SaveSystem
         {
             if (summary.State == SlotHeaderState.Ok) return summary.Header.Sequence;
             var read = _saves.Read(SlotEntries.Save(summary.Slot), SaveDocument.FromJson);
-            var sequence = read.Status == ReadStatus.Ok ? read.Value.Meta?[SlotHeader<TInfo>.SequenceProperty] : null;
+            var sequence = read.Status == ReadStatus.Ok ? read.Value.Meta?[SlotHeaderFields.Sequence] : null;
             return sequence != null && sequence.Type == JTokenType.Integer ? sequence.Value<long>() : UnknownSequence;
         }
 
         private long NextSequence()
         {
-            var highest = 0L;
-            foreach (var summary in ListSlots())
-                highest = Math.Max(highest, SequenceOf(summary));
-            return highest + 1;
+            if (_highestSequence == null)
+            {
+                var highest = 0L;
+                foreach (var summary in ListSlots())
+                    highest = Math.Max(highest, SequenceOf(summary));
+                _highestSequence = highest;
+            }
+            return _highestSequence.Value + 1;
         }
 
         private SlotId PickAutosaveSlot()

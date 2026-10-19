@@ -7,7 +7,7 @@ namespace SaveSystem
      * <summary>The shared shape of saving and loading a service: capture now on the calling thread, write and read on
      * the worker one job at a time, restore on the thread that awaited the load.</summary>
      */
-    public sealed class SaveDocumentQueue
+    internal sealed class SaveDocumentQueue
     {
         #region Private Fields
 
@@ -70,7 +70,7 @@ namespace SaveSystem
                     return new LoadResult(LoadStatus.Damaged, problem: result.Problem);
                 default:
                     var loaded = Service.Restore(result.Value);
-                    return result.UsedBackup ? loaded.FromBackup(result.Problem) : loaded;
+                    return result.UsedBackup ? loaded.WithBackup(result.Problem) : loaded;
             }
         }
 

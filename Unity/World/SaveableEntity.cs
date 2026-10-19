@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -41,6 +43,7 @@ namespace SaveSystem
 #if UNITY_EDITOR
         private void OnValidate()
         {
+            ReportDuplicateComponentKeys();
             if (PrefabUtility.IsPartOfPrefabAsset(this) || PrefabStageUtility.GetPrefabStage(gameObject) != null)
             {
                 if (string.IsNullOrEmpty(entityId)) return;
@@ -69,7 +72,7 @@ namespace SaveSystem
         [ContextMenu("New Entity Id")]
         public void AssignNewId()
         {
-            entityId = Guid.NewGuid().ToString("N");
+            entityId = AssetId.New().Value;
 #if UNITY_EDITOR
             EditorUtility.SetDirty(this);
 #endif
@@ -80,11 +83,34 @@ namespace SaveSystem
         #region Helpers
 
 #if UNITY_EDITOR
+        /** <summary>Keyed by scene, resolving to the entities by id seen in that scene since its hierarchy last changed.</summary> */
+        private static readonly Dictionary<Scene, Dictionary<string, SaveableEntity>> IdsByScene = new Dictionary<Scene, Dictionary<string, SaveableEntity>>();
+
+        static SaveableEntity() => EditorApplication.hierarchyChanged += IdsByScene.Clear;
+
         private bool IsSharedInItsScene()
         {
-            foreach (var other in FindObjectsByType<SaveableEntity>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-                if (other != this && other.gameObject.scene == gameObject.scene && string.Equals(other.entityId, entityId, StringComparison.Ordinal)) return true;
+            var scene = gameObject.scene;
+            if (!IdsByScene.TryGetValue(scene, out var ids)) IdsByScene[scene] = ids = IdsIn(scene, this);
+            if (ids.TryGetValue(entityId, out var holder) && holder != null && holder != this) return true;
+            ids[entityId] = this;
             return false;
+        }
+
+        private static Dictionary<string, SaveableEntity> IdsIn(Scene scene, SaveableEntity asking)
+        {
+            var ids = new Dictionary<string, SaveableEntity>(StringComparer.Ordinal);
+            foreach (var entity in FindObjectsByType<SaveableEntity>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
+                if (entity != asking && entity.gameObject.scene == scene && !string.IsNullOrEmpty(entity.entityId) && !ids.ContainsKey(entity.entityId))
+                    ids.Add(entity.entityId, entity);
+            return ids;
+        }
+
+        private void ReportDuplicateComponentKeys()
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var component in GetComponents<ISaveableComponent>())
+                if (!keys.Add(component.Key)) Debug.LogError($"Save: {name} has two saved components keyed '{component.Key}'; one won't be saved.", this);
         }
 #endif
 

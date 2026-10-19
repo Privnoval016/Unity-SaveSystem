@@ -50,8 +50,8 @@ namespace SaveSystem
         /** <summary>Builds a value from its components; a missing component is 0.</summary> */
         protected abstract T FromComponents(double[] components);
 
-        /** <summary>Writes one component; whole-number types write integers.</summary> */
-        protected virtual void WriteComponent(JsonWriter writer, double component) => writer.WriteValue(component);
+        /** <summary>Writes one component as a float; whole-number types write integers.</summary> */
+        protected virtual void WriteComponent(JsonWriter writer, double component) => writer.WriteValue((float)component);
 
         #endregion
     }

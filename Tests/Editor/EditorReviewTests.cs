@@ -45,7 +45,7 @@ namespace SaveSystem.Tests
             var profile = new ProfileSection();
             profile.Data.Name = "2024-03-05";
             service.Register(profile);
-            var slots = new SaveSlots<object>(service, storage, null, new SlotOptions { Worker = new ImmediateSaveWorker() });
+            var slots = new SaveSlots<object>(service, storage, null, new SlotOptions(new ImmediateSaveWorker()));
             await slots.SaveAsync(SlotId.Manual(1));
 
             var model = new SaveBrowserModel(storage);
@@ -74,7 +74,7 @@ namespace SaveSystem.Tests
             var service = new SaveService();
             var counter = new CounterSection("counter");
             service.Register(counter);
-            var slots = new SaveSlots<object>(service, storage, null, new SlotOptions { Worker = new ImmediateSaveWorker(), Codec = new SaveFileCodec(new[] { aes }) });
+            var slots = new SaveSlots<object>(service, storage, null, new SlotOptions(new ImmediateSaveWorker()) { Codec = new SaveFileCodec(new[] { aes }) });
             await slots.SaveAsync(SlotId.Manual(1));
 
             var model = new SaveBrowserModel(storage, new ISaveTransform[] { aes });

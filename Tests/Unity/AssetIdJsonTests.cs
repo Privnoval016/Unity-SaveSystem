@@ -30,10 +30,14 @@ namespace SaveSystem.Tests
         [TestCase("\"not hex\"")]
         [TestCase("12")]
         [TestCase("{}")]
-        public void Garbage_ReadsAsEmpty(string value)
+        [TestCase("{\"a\":{\"b\":1}}")]
+        [TestCase("[1,[2]]")]
+        public void Garbage_ReadsAsEmpty_AndTheRestStillLoads(string value)
         {
-            var loaded = JsonConvert.DeserializeObject<Holder>("{\"Id\":" + value + "}");
+            var id = AssetId.New();
+            var loaded = JsonConvert.DeserializeObject<Holder>("{\"Id\":" + value + ",\"Empty\":\"" + id.Value + "\"}");
             Assert.That(loaded.Id.IsEmpty);
+            Assert.That(loaded.Empty, Is.EqualTo(id));
         }
     }
 }

@@ -56,7 +56,7 @@ namespace SaveSystem.Tests
         }
 
         private SaveSlots<object> Slots(ISaveStorage storage, ISaveWorker worker) =>
-            new SaveSlots<object>(_service, storage, null, new SlotOptions { Worker = worker });
+            new SaveSlots<object>(_service, storage, null, new SlotOptions(worker));
 
         [Test]
         public async Task TwoSavesToOneSlot_RunInOrder_AndTheSecondWins()

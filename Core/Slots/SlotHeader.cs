@@ -3,6 +3,32 @@ using Newtonsoft.Json;
 
 namespace SaveSystem
 {
+    /** <summary>The JSON names of a slot header's fields.</summary> */
+    public static class SlotHeaderFields
+    {
+        #region Properties
+
+        /** <summary>The header layout this code writes.</summary> */
+        public const int CurrentFormat = 1;
+
+        /** <summary>The layout version.</summary> */
+        public const string Format = "format";
+
+        /** <summary>The slot's name.</summary> */
+        public const string Slot = "slot";
+
+        /** <summary>The save's sequence number.</summary> */
+        public const string Sequence = "sequence";
+
+        /** <summary>When it was saved.</summary> */
+        public const string SavedAtUtc = "savedAtUtc";
+
+        /** <summary>The game's own fields.</summary> */
+        public const string Info = "info";
+
+        #endregion
+    }
+
     /**
      * <summary>What the save screen shows for a slot, kept in a small file beside the save so listing never reads saves.</summary>
      * <typeparam name="TInfo">The game's own fields, such as chapter, place and play time.</typeparam>
@@ -11,33 +37,24 @@ namespace SaveSystem
     {
         #region Properties
 
-        /** <summary>The header layout this code writes.</summary> */
-        public const int CurrentFormat = 1;
-
-        /** <summary>The JSON name of <see cref="Slot" />.</summary> */
-        public const string SlotProperty = "slot";
-
-        /** <summary>The JSON name of <see cref="Sequence" />.</summary> */
-        public const string SequenceProperty = "sequence";
-
         /** <summary>The header layout it was written with.</summary> */
-        [JsonProperty("format")]
-        public int Format { get; set; } = CurrentFormat;
+        [JsonProperty(SlotHeaderFields.Format)]
+        public int Format { get; set; } = SlotHeaderFields.CurrentFormat;
 
         /** <summary>The slot's name.</summary> */
-        [JsonProperty(SlotProperty)]
+        [JsonProperty(SlotHeaderFields.Slot)]
         public string Slot { get; set; }
 
         /** <summary>Counts up with every save to any slot, so the oldest autosave is found without trusting the clock.</summary> */
-        [JsonProperty(SequenceProperty)]
+        [JsonProperty(SlotHeaderFields.Sequence)]
         public long Sequence { get; set; }
 
         /** <summary>When the save was made, in UTC.</summary> */
-        [JsonProperty("savedAtUtc")]
+        [JsonProperty(SlotHeaderFields.SavedAtUtc)]
         public DateTime SavedAtUtc { get; set; }
 
         /** <summary>The game's own fields. Plain data only: headers are read without asset or engine converters.</summary> */
-        [JsonProperty("info")]
+        [JsonProperty(SlotHeaderFields.Info)]
         public TInfo Info { get; set; }
 
         #endregion

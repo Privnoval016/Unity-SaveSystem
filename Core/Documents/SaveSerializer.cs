@@ -18,11 +18,7 @@ namespace SaveSystem
      */
     public sealed class SaveSerializer
     {
-        #region Private Fields
-
-        #endregion
-
-        #region Properties
+                #region Properties
 
         /** <summary>The deepest JSON nesting a save may have. Writing deeper data fails, so nothing unreadable is ever written.</summary> */
         public const int MaxDepth = 128;

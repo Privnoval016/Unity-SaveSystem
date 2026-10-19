@@ -23,7 +23,6 @@ namespace SaveSystem
 
         /** <inheritdoc /> */
         public void Error(string message) { }
-    
 
         #endregion
     }

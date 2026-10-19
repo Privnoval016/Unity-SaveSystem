@@ -56,7 +56,7 @@ namespace SaveSystem
             }
             catch (Exception)
             {
-                if (movedToBackup && !File.Exists(path)) File.Move(backup, path);
+                if (movedToBackup && !File.Exists(path)) TryMove(backup, path);
                 throw;
             }
         }
@@ -95,6 +95,20 @@ namespace SaveSystem
         }
 
         private static byte[] ReadIfExists(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;
+
+        private static void TryMove(string from, string to)
+        {
+            try
+            {
+                File.Move(from, to);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
 
         private static void DeleteIfExists(string path)
         {

@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.0 (2026-10-19)
+
+From the second review, and a pass on scale.
+
+- **Breaking changes:**
+  - Sections restore in registration order (`RestoreOrder` is gone).
+  - The worker is a required argument of `SaveFileOptions` and `SlotOptions`.
+  - `IAssetResolver.TryFind` returns a `UnityEngine.Object`.
+  - `LoadResult.FromBackup` is now `WithBackup`.
+  - `SlotHeader` field names live in `SlotHeaderFields`.
+  - `SaveDocumentQueue` and `AssetCatalog.SetAssets` are internal.
+- **Safer:**
+  - Upgrades must cover every older version, checked when a section registers.
+  - A document upgrade that leaves the save invalid fails the load (`UpgradeFailed`).
+  - A section unregistered between prepare and apply is not restored.
+  - A section registered between prepare and apply with no data gets its default.
+  - A saved but unreadable file (another key or transform) is never treated as damaged.
+  - A failed header write removes the stale header.
+  - The swap rollback never hides the original error.
+  - The id fixer saves each asset as it writes it.
+- **Scale:**
+  - An incremental id index: no project scan per import.
+  - Ids are assigned when a type becomes saveable.
+  - Catalogs are merged rather than rebuilt.
+  - The slot sequence is cached.
+  - The backup check reads the frame and checksum only.
+  - The entity id check is linear.
+  - Section lookup is by dictionary.
+  - Entity captures skip a copy.
+  - Engine vectors are written as floats.
+- **Added:**
+  - The scene id audit, also run before builds.
+  - A *Fix Asset Ids* menu.
+  - An error for duplicate component keys on an entity.
+  - `UnitySaveLog.Instance`.
+  - A `Log` option for slots.
+  - The scale test.
+- **Tests:** 388.
+
 ## 0.2.0 (2026-10-19)
 
 Fixes and additions from the first code review.

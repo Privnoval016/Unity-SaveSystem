@@ -28,10 +28,10 @@ namespace SaveSystem
         #region Public API
 
         /** <summary>Makes a store for the service's sections.</summary> */
-        public SettingsStore(SaveService service, ISaveStorage storage, SaveFileOptions options = null)
+        public SettingsStore(SaveService service, ISaveStorage storage, SaveFileOptions options)
         {
             if (service == null) throw new ArgumentNullException(nameof(service));
-            options = options ?? new SaveFileOptions();
+            if (options == null) throw new ArgumentNullException(nameof(options));
             _documents = new SaveDocumentQueue(service, options.Worker, Queue);
             _store = new SaveFileStore(storage, service.Serializer, options.Codec);
         }

@@ -43,6 +43,20 @@ namespace SaveSystem.EditorTools
             return changed;
         }
 
+        /**
+         * <summary>Updates the given catalogs with changed assets, without a project scan: keeps what they list that is
+         * still a live saveable asset with an id, adds the changed ones, and sorts by id.</summary>
+         * <returns>How many catalogs changed.</returns>
+         */
+        public static int Merge(IEnumerable<AssetCatalog> catalogs, IEnumerable<ScriptableObject> changed)
+        {
+            var changedList = changed.ToList();
+            var count = 0;
+            foreach (var catalog in catalogs)
+                count += Rebuild(new[] { catalog }, catalog.Assets.Concat(changedList).Where(asset => asset != null).Distinct());
+            return count;
+        }
+
         /** <summary>Every catalog asset in the project.</summary> */
         public static List<AssetCatalog> FindCatalogs() => AssetDatabase.FindAssets(CatalogFilter)
             .Select(guid => AssetDatabase.LoadAssetAtPath<AssetCatalog>(AssetDatabase.GUIDToAssetPath(guid)))

@@ -14,8 +14,10 @@ namespace SaveSystem
         Damaged,
         /** <summary>The save was written by a newer build. Nothing was restored.</summary> */
         TooNew,
-        /** <summary>A document upgrade, or a section's data, could not be upgraded or read. Nothing was restored.</summary> */
+        /** <summary>A section's data could not be upgraded or read. Nothing was restored.</summary> */
         SectionFailed,
+        /** <summary>A whole-save <see cref="DocumentUpgrade" /> threw. Nothing was restored.</summary> */
+        UpgradeFailed,
         /** <summary>A section threw while applying its data. The other sections were restored.</summary> */
         RestoreFailed,
     }
@@ -63,7 +65,7 @@ namespace SaveSystem
         }
 
         /** <summary>The same result, marked as loaded from the backup because of the given problem with the save.</summary> */
-        public LoadResult FromBackup(string saveProblem) =>
+        public LoadResult WithBackup(string saveProblem) =>
             new LoadResult(Status, Sections, Problem == null ? saveProblem : $"{saveProblem}; {Problem}", true);
 
         /** <inheritdoc /> */

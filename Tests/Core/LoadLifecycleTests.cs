@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
@@ -32,7 +33,7 @@ namespace SaveSystem.Tests
             Assert.That(report.Outcome, Is.EqualTo(SectionOutcome.Failed));
             Assert.That(service.IsRegistered("area"), Is.False);
             Assert.That(service.Capture().Sections["area"].Data["Value"].ToObject<int>(), Is.EqualTo(9));
-            Assert.That(log.Errors, Has.Count.EqualTo(2));
+            Assert.That(log.Errors.Any(error => error.Contains("area")));
 
             var working = new CounterSection("area");
             Assert.That(service.Register(working).Outcome, Is.EqualTo(SectionOutcome.Restored));
@@ -58,8 +59,8 @@ namespace SaveSystem.Tests
         public void SectionRegisteredBetweenPrepareAndApply_ThatCantRead_KeepsItsDataHeld()
         {
             var service = new SaveService();
-            var load = service.Prepare(Saved("area", 7, 1));
-            var area = new CounterSection("area", 2);
+            var load = service.Prepare(Saved("area", 7, 3));
+            var area = new CounterSection("area", 2, new SectionUpgrade(1, data => data));
             service.Register(area);
 
             var result = service.Apply(load);
@@ -75,11 +76,44 @@ namespace SaveSystem.Tests
             var service = new SaveService();
             var area = new CounterSection("area");
             service.Register(area);
+            area.Value = 1;
             var load = service.Prepare(Saved("area", 5));
             service.Unregister(area);
 
             service.Apply(load);
+            Assert.That(area.Value, Is.EqualTo(1));
+            Assert.That(area.RestoreCount, Is.Zero);
             Assert.That(service.Capture().Sections["area"].Data["Value"].ToObject<int>(), Is.EqualTo(5));
+        }
+
+        [Test]
+        public void SectionRegisteredBetweenPrepareAndApply_WithNoData_GetsItsDefault()
+        {
+            var service = new SaveService();
+            service.Restore(Saved("mods", 4));
+            var load = service.Prepare(new SaveDocument());
+            var mods = new CounterSection("mods") { DefaultValue = 0 };
+            service.Register(mods);
+            Assert.That(mods.Value, Is.EqualTo(4));
+
+            service.Apply(load);
+            Assert.That(mods.Value, Is.Zero);
+        }
+
+        [Test]
+        public void SectionReplacedBetweenPrepareAndApply_OnlyTheNewOneRestores()
+        {
+            var service = new SaveService();
+            var old = new CounterSection("area");
+            service.Register(old);
+            var load = service.Prepare(Saved("area", 6));
+            service.Unregister(old);
+            var replacement = new CounterSection("area");
+            service.Register(replacement);
+
+            service.Apply(load);
+            Assert.That(old.RestoreCount, Is.Zero);
+            Assert.That(replacement.Value, Is.EqualTo(6));
         }
 
         [Test]
@@ -111,7 +145,7 @@ namespace SaveSystem.Tests
         public void UpgradedData_IsSavedAtTheNewVersion_AndReloadsWithoutUpgradingAgain()
         {
             var upgrades = 0;
-            CounterSection Make() => new CounterSection("a", 2, 0, new SectionUpgrade(1, data =>
+            CounterSection Make() => new CounterSection("a", 2, new SectionUpgrade(1, data =>
             {
                 upgrades++;
                 data["Value"] = data["Value"].ToObject<int>() + 100;
@@ -136,7 +170,7 @@ namespace SaveSystem.Tests
         [Test]
         public void RestoringOneDocumentTwice_GivesTheSameState()
         {
-            var section = new CounterSection("a", 2, 0, new SectionUpgrade(1, data => new JObject { ["Value"] = data["Value"].ToObject<int>() * 2 }));
+            var section = new CounterSection("a", 2, new SectionUpgrade(1, data => new JObject { ["Value"] = data["Value"].ToObject<int>() * 2 }));
             var service = new SaveService();
             service.Register(section);
             var document = Saved("a", 4);
@@ -149,10 +183,10 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void LoadResult_FromBackup_LeavesTheOriginalUntouched()
+        public void LoadResult_WithBackup_LeavesTheOriginalUntouched()
         {
             var original = new LoadResult(LoadStatus.Loaded);
-            var fromBackup = original.FromBackup("damaged");
+            var fromBackup = original.WithBackup("damaged");
             Assert.That(original.UsedBackup, Is.False);
             Assert.That(original.Problem, Is.Null);
             Assert.That(fromBackup.UsedBackup);

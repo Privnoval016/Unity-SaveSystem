@@ -22,7 +22,6 @@ namespace SaveSystem
             reader.Skip();
             return AssetId.TryParse(text, out var id) ? id : default;
         }
-    
 
         #endregion
     }

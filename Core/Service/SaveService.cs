@@ -23,6 +23,9 @@ namespace SaveSystem
         #region Private Fields
 
         private readonly List<ISaveSection> _sections = new List<ISaveSection>();
+
+        /** <summary>Keyed by section key, resolving to the registered section.</summary> */
+        private readonly Dictionary<string, ISaveSection> _byKey = new Dictionary<string, ISaveSection>(StringComparer.Ordinal);
         private readonly List<DocumentUpgrade> _documentUpgrades = new List<DocumentUpgrade>();
 
         /** <summary>Keyed by section key, resolving to data whose system is not registered.</summary> */
@@ -53,7 +56,7 @@ namespace SaveSystem
         }
 
         /** <summary>True when a section with this key is registered.</summary> */
-        public bool IsRegistered(string key) => FindSection(key) != null;
+        public bool IsRegistered(string key) => key != null && _byKey.ContainsKey(key);
 
         /**
          * <summary>Adds an upgrade that runs once on every save that hasn't had it, before sections read their data.</summary>
@@ -80,7 +83,7 @@ namespace SaveSystem
             SectionPreparer.Validate(section);
             if (IsRegistered(section.Key)) throw new InvalidOperationException($"A section with key '{section.Key}' is already registered.");
 
-            _sections.Add(section);
+            Add(section);
             if (!_held.TryGetValue(section.Key, out var record)) return new SectionReport(section.Key, SectionOutcome.Unchanged, SectionReport.NoVersion);
             return RestoreRegistered(section, record);
         }
@@ -88,7 +91,7 @@ namespace SaveSystem
         /** <summary>Removes a section, keeping its current state held so it is saved and restored on the next register.</summary> */
         public void Unregister(ISaveSection section)
         {
-            if (section == null || !_sections.Remove(section)) return;
+            if (section == null || !Remove(section)) return;
             try
             {
                 _held[section.Key] = new SectionRecord(section.Version, section.Capture(Serializer.Json));
@@ -133,15 +136,15 @@ namespace SaveSystem
                 return new PreparedLoad(new LoadResult(LoadStatus.TooNew, problem: $"Save format {document.Format} is newer than {SaveDocument.CurrentFormat}."));
 
             var working = document.Copy();
-            var upgradeFailure = RunDocumentUpgrades(working);
-            if (upgradeFailure != null) return new PreparedLoad(new LoadResult(LoadStatus.SectionFailed, problem: upgradeFailure));
+            var upgradeFailure = RunDocumentUpgrades(ref working);
+            if (upgradeFailure != null) return new PreparedLoad(new LoadResult(LoadStatus.UpgradeFailed, problem: upgradeFailure));
 
             var load = new PreparedLoad(working);
-            foreach (var section in InRestoreOrder())
+            foreach (var section in _sections)
             {
                 var prepared = PrepareFrom(working, section);
                 if (!prepared.Succeeded)
-                    return new PreparedLoad(new LoadResult(prepared.TooNew ? LoadStatus.TooNew : LoadStatus.SectionFailed, new[] { prepared.Report }, prepared.Report.ToString()));
+                    return new PreparedLoad(new LoadResult(prepared.Failure, new[] { prepared.Report }, prepared.Report.ToString()));
                 load.Add(prepared);
             }
             return load;
@@ -157,10 +160,13 @@ namespace SaveSystem
             if (load == null) throw new ArgumentNullException(nameof(load));
             load.MarkApplied();
 
-            var reports = load.Sections.Select(TryApply).ToList();
+            var reports = load.Sections.Where(IsStillRegistered).Select(TryApply).ToList();
             _held.Clear();
-            foreach (var section in _sections.Where(section => load.Sections.All(prepared => prepared.Section != section)).ToList())
-                if (load.Document.Sections.TryGetValue(section.Key, out var record)) reports.Add(RestoreRegistered(section, record));
+            var prepared = new HashSet<ISaveSection>(load.Sections.Select(section => section.Section));
+            foreach (var section in _sections.Where(section => !prepared.Contains(section)).ToList())
+                reports.Add(load.Document.Sections.TryGetValue(section.Key, out var record)
+                    ? RestoreRegistered(section, record)
+                    : TryApply(SectionPreparer.Default(section)));
             HoldUnregistered(load.Document, reports);
 
             _appliedUpgrades.Clear();
@@ -171,9 +177,12 @@ namespace SaveSystem
         /** <summary>Forgets held data and gives every registered section a new game's state.</summary> */
         public LoadResult NewGame()
         {
-            var prepared = InRestoreOrder().Select(SectionPreparer.Default).ToList();
-            var failed = prepared.FirstOrDefault(section => !section.Succeeded);
-            if (failed.Section != null) return new LoadResult(LoadStatus.SectionFailed, new[] { failed.Report }, failed.Report.ToString());
+            var prepared = _sections.Select(SectionPreparer.Default).ToList();
+            if (prepared.Any(section => !section.Succeeded))
+            {
+                var failed = prepared.First(section => !section.Succeeded);
+                return new LoadResult(LoadStatus.SectionFailed, new[] { failed.Report }, failed.Report.ToString());
+            }
 
             _held.Clear();
             _appliedUpgrades.Clear();
@@ -184,14 +193,19 @@ namespace SaveSystem
 
         #region Helpers
 
-        private ISaveSection FindSection(string key)
+        private void Add(ISaveSection section)
         {
-            foreach (var section in _sections)
-                if (string.Equals(section.Key, key, StringComparison.Ordinal)) return section;
-            return null;
+            _sections.Add(section);
+            _byKey.Add(section.Key, section);
         }
 
-        private List<ISaveSection> InRestoreOrder() => _sections.OrderBy(section => section.RestoreOrder).ToList();
+        private bool Remove(ISaveSection section)
+        {
+            if (!_byKey.TryGetValue(section.Key, out var registered) || registered != section) return false;
+            _byKey.Remove(section.Key);
+            _sections.Remove(section);
+            return true;
+        }
 
         private JToken CaptureSection(ISaveSection section)
         {
@@ -205,7 +219,7 @@ namespace SaveSystem
             }
         }
 
-        private string RunDocumentUpgrades(SaveDocument document)
+        private string RunDocumentUpgrades(ref SaveDocument document)
         {
             foreach (var upgrade in _documentUpgrades)
             {
@@ -213,15 +227,19 @@ namespace SaveSystem
                 try
                 {
                     upgrade.Apply(document);
+                    document.AppliedUpgrades.Add(upgrade.Id);
+                    document = document.Copy();
                 }
                 catch (Exception e)
                 {
-                    return $"document upgrade '{upgrade.Id}' threw: {e.Message}";
+                    return $"document upgrade '{upgrade.Id}' failed: {e.Message}";
                 }
-                document.AppliedUpgrades.Add(upgrade.Id);
             }
             return null;
         }
+
+        private bool IsStillRegistered(PreparedSection prepared) =>
+            _byKey.TryGetValue(prepared.Section.Key, out var registered) && registered == prepared.Section;
 
         private PreparedSection PrepareFrom(SaveDocument document, ISaveSection section) =>
             document.Sections.TryGetValue(section.Key, out var record)
@@ -234,7 +252,7 @@ namespace SaveSystem
             var report = prepared.Succeeded ? TryApply(prepared) : prepared.Report;
             if (report.Outcome == SectionOutcome.Failed)
             {
-                _sections.Remove(section);
+                Remove(section);
                 _held[section.Key] = record;
                 _log.Error($"Save section '{section.Key}' not registered: {report.Problem}");
                 return report;

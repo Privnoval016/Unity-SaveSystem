@@ -134,30 +134,19 @@ namespace SaveSystem
         /** <summary>The transform ids a file's header names, in the order they were applied; empty when the header can't be read.</summary> */
         public static IReadOnlyList<string> ReadTransformIds(byte[] file)
         {
-            var lineEnd = file == null ? -1 : Array.IndexOf(file, NewLine, 0, Math.Min(file.Length, MaxHeaderLength));
-            if (lineEnd < 0 || !TryReadHeader(file, lineEnd, out _, out _, out var transforms, out _)) return Array.Empty<string>();
-            return transforms;
+            var frame = Frame.Read(file);
+            return frame.Transforms ?? (IReadOnlyList<string>)Array.Empty<string>();
         }
+
+        /** <summary>Checks the frame and checksum only, without reversing transforms. Never throws for bad input.</summary> */
+        public static DecodeStatus Verify(byte[] file) => Frame.Read(file).Check(file).Status;
 
         /** <summary>Checks the frame and checksum, then reverses the transforms. Never throws for bad input.</summary> */
         public DecodeResult Decode(byte[] file)
         {
-            if (file == null || file.Length == 0) return Fail(DecodeStatus.Empty, "The file is empty.");
-
-            var lineEnd = Array.IndexOf(file, NewLine, 0, Math.Min(file.Length, MaxHeaderLength));
-            if (lineEnd < 0) return Fail(DecodeStatus.BadHeader, "No header line.");
-            if (!TryReadHeader(file, lineEnd, out var length, out var checksum, out var transforms, out var problem))
-                return Fail(DecodeStatus.BadHeader, problem);
-
-            var storedLength = file.Length - lineEnd - 1;
-            if (storedLength != length) return Fail(DecodeStatus.WrongLength, $"Payload is {storedLength} bytes; the header says {length}.");
-
-            var stored = new byte[storedLength];
-            Buffer.BlockCopy(file, lineEnd + 1, stored, 0, storedLength);
-            if (!string.Equals(Checksum(stored), checksum, StringComparison.Ordinal))
-                return Fail(DecodeStatus.ChecksumMismatch, "The checksum does not match.");
-
-            return Untransform(stored, transforms);
+            var frame = Frame.Read(file);
+            var checkedFrame = frame.Check(file);
+            return checkedFrame.Status == DecodeStatus.Ok ? Untransform(checkedFrame.Payload, frame.Transforms) : checkedFrame;
         }
 
         #endregion
@@ -166,39 +155,11 @@ namespace SaveSystem
 
         private void AddKnown(ISaveTransform transform)
         {
-            if (transform == null) throw new ArgumentException("A transform is null.");
-            if (!SaveNames.IsValidEntryName(transform.Id)) throw new ArgumentException($"Invalid transform id '{transform.Id}'.");
+            if (transform == null) throw new ArgumentException("A transform is null.", nameof(transform));
+            if (!SaveNames.IsValidEntryName(transform.Id)) throw new ArgumentException($"Invalid transform id '{transform.Id}'.", nameof(transform));
             if (_known.TryGetValue(transform.Id, out var existing) && !ReferenceEquals(existing, transform))
-                throw new ArgumentException($"Two transforms use the id '{transform.Id}'.");
+                throw new ArgumentException($"Two transforms use the id '{transform.Id}'.", nameof(transform));
             _known[transform.Id] = transform;
-        }
-
-        private static bool TryReadHeader(byte[] file, int lineEnd, out long length, out string checksum, out string[] transforms, out string problem)
-        {
-            length = 0;
-            checksum = null;
-            transforms = null;
-            try
-            {
-                var header = JObject.Parse(SaveSerializer.Utf8.GetString(file, 0, lineEnd));
-                if (header.Value<int?>(FormatProperty) != HeaderFormat) return Problem("Unknown header format.", out problem);
-                length = header.Value<long?>(LengthProperty) ?? -1;
-                checksum = header.Value<string>(ChecksumProperty);
-                transforms = (header[TransformsProperty] as JArray)?.Select(token => token.Value<string>()).ToArray();
-                if (length < 0 || string.IsNullOrEmpty(checksum) || transforms == null) return Problem("The header is missing a field.", out problem);
-                problem = null;
-                return true;
-            }
-            catch (Exception e)
-            {
-                return Problem($"The header is not valid: {e.Message}", out problem);
-            }
-        }
-
-        private static bool Problem(string message, out string problem)
-        {
-            problem = message;
-            return false;
         }
 
         private DecodeResult Untransform(byte[] stored, string[] transforms)
@@ -218,6 +179,69 @@ namespace SaveSystem
                 }
             }
             return new DecodeResult(DecodeStatus.Ok, payload, null);
+        }
+
+        /** <summary>A file's header line, read: where the payload starts, its length, checksum and transforms, or why it couldn't be read.</summary> */
+        private readonly struct Frame
+        {
+            private readonly int _payloadStart;
+            private readonly long _length;
+            private readonly string _checksum;
+
+            public string[] Transforms { get; }
+            public DecodeResult Problem { get; }
+
+            private Frame(int payloadStart, long length, string checksum, string[] transforms)
+            {
+                _payloadStart = payloadStart;
+                _length = length;
+                _checksum = checksum;
+                Transforms = transforms;
+                Problem = default;
+            }
+
+            private Frame(DecodeStatus status, string problem)
+            {
+                _payloadStart = 0;
+                _length = 0;
+                _checksum = null;
+                Transforms = null;
+                Problem = Fail(status, problem);
+            }
+
+            public static Frame Read(byte[] file)
+            {
+                if (file == null || file.Length == 0) return new Frame(DecodeStatus.Empty, "The file is empty.");
+                var lineEnd = Array.IndexOf(file, NewLine, 0, Math.Min(file.Length, MaxHeaderLength));
+                if (lineEnd < 0) return new Frame(DecodeStatus.BadHeader, "No header line.");
+                try
+                {
+                    var header = JObject.Parse(SaveSerializer.Utf8.GetString(file, 0, lineEnd));
+                    if (header.Value<int?>(FormatProperty) != HeaderFormat) return new Frame(DecodeStatus.BadHeader, "Unknown header format.");
+                    var length = header.Value<long?>(LengthProperty) ?? -1;
+                    var checksum = header.Value<string>(ChecksumProperty);
+                    var transforms = (header[TransformsProperty] as JArray)?.Select(token => token.Value<string>()).ToArray();
+                    if (length < 0 || string.IsNullOrEmpty(checksum) || transforms == null) return new Frame(DecodeStatus.BadHeader, "The header is missing a field.");
+                    return new Frame(lineEnd + 1, length, checksum, transforms);
+                }
+                catch (Exception e)
+                {
+                    return new Frame(DecodeStatus.BadHeader, $"The header is not valid: {e.Message}");
+                }
+            }
+
+            public DecodeResult Check(byte[] file)
+            {
+                if (Transforms == null) return Problem;
+                var storedLength = file.Length - _payloadStart;
+                if (storedLength != _length) return Fail(DecodeStatus.WrongLength, $"Payload is {storedLength} bytes; the header says {_length}.");
+
+                var stored = new byte[storedLength];
+                Buffer.BlockCopy(file, _payloadStart, stored, 0, storedLength);
+                return string.Equals(Checksum(stored), _checksum, StringComparison.Ordinal)
+                    ? new DecodeResult(DecodeStatus.Ok, stored, null)
+                    : Fail(DecodeStatus.ChecksumMismatch, "The checksum does not match.");
+            }
         }
 
         private static string Checksum(byte[] data)
