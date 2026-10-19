@@ -1,15 +1,16 @@
-using System;
 using System.Collections.Generic;
+using System;
+using Extensions.Ids;
 using Newtonsoft.Json;
-using UnityEngine;
 using Object = UnityEngine.Object;
+using UnityEngine;
 
 namespace SaveSystem
 {
     /**
      * <summary>Saves a reference to a saveable asset as its id, and finds the asset again on load.</summary>
      * <remarks>
-     * Data classes hold the asset itself (any type that is an <see cref="ISaveableAsset" />). An id with no asset, or
+     * Data classes hold the asset itself (any type that is an <see cref="IIdentifiedAsset" />). An id with no asset, or
      * with an asset of another type, loads as null with one warning per id.
      * </remarks>
      */
@@ -38,7 +39,7 @@ namespace SaveSystem
         }
 
         /** <inheritdoc /> */
-        public override bool CanConvert(Type objectType) => typeof(ISaveableAsset).IsAssignableFrom(objectType);
+        public override bool CanConvert(Type objectType) => typeof(IIdentifiedAsset).IsAssignableFrom(objectType);
 
         /** <inheritdoc /> */
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
@@ -49,7 +50,7 @@ namespace SaveSystem
                 writer.WriteNull();
                 return;
             }
-            if (!SaveableAssets.TryGetId(asset, out var id))
+            if (!AssetIds.TryGetId(asset, out var id))
             {
                 WarnOnce(asset.name, $"Save: {asset.name} has no asset id; saved as nothing.");
                 writer.WriteNull();

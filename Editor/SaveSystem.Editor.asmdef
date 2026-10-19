@@ -3,7 +3,9 @@
     "rootNamespace": "SaveSystem.EditorTools",
     "references": [
         "SaveSystem.Core",
-        "SaveSystem"
+        "SaveSystem",
+        "Extensions",
+        "Extensions.Editor"
     ],
     "includePlatforms": [
         "Editor"

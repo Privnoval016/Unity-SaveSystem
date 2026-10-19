@@ -2,7 +2,8 @@
     "name": "SaveSystem",
     "rootNamespace": "SaveSystem",
     "references": [
-        "SaveSystem.Core"
+        "SaveSystem.Core",
+        "Extensions"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

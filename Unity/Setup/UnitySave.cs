@@ -1,6 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
+using System;
+using Extensions.Ids;
 using Newtonsoft.Json;
 using UnityEngine;
 
@@ -35,7 +36,7 @@ namespace SaveSystem
         /** <summary>A serializer that writes engine value types, and saveable assets as their ids.</summary> */
         public static SaveSerializer CreateSerializer(IAssetResolver assets, ISaveLog log = null)
         {
-            var converters = new List<JsonConverter>(UnityValueConverters.Create());
+            var converters = new List<JsonConverter>(UnityValueConverters.Create()) { new AssetIdJsonConverter() };
             if (assets != null) converters.Add(new SaveableAssetConverter(assets, log));
             return new SaveSerializer(converters);
         }

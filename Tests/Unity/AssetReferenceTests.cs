@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json.Linq;
+using Extensions.Ids;
+using Extensions.Tests;
 using NUnit.Framework;
-using UnityEngine;
-using UnityEngine.TestTools;
+using Newtonsoft.Json.Linq;
 using Object = UnityEngine.Object;
+using UnityEngine.TestTools;
+using UnityEngine;
 
 namespace SaveSystem.Tests
 {
@@ -14,10 +16,10 @@ namespace SaveSystem.Tests
     {
         public sealed class LoadoutData
         {
-            public TestSaveableAsset Main;
-            public List<TestSaveableAsset> Bag = new List<TestSaveableAsset>();
-            public ISaveableAsset Anything;
-            public OtherSaveableAsset Other;
+            public TestIdentifiedAsset Main;
+            public List<TestIdentifiedAsset> Bag = new List<TestIdentifiedAsset>();
+            public IIdentifiedAsset Anything;
+            public OtherIdentifiedAsset Other;
         }
 
         private sealed class LoadoutSection : SaveSection<LoadoutData>
@@ -57,9 +59,9 @@ namespace SaveSystem.Tests
             return made;
         }
 
-        private TestSaveableAsset MakeSaveable(string name)
+        private TestIdentifiedAsset MakeSaveable(string name)
         {
-            var asset = Make<TestSaveableAsset>();
+            var asset = Make<TestIdentifiedAsset>();
             asset.name = name;
             asset.SetId(AssetId.New());
             return asset;
@@ -129,7 +131,7 @@ namespace SaveSystem.Tests
         [Test]
         public void AssetOfAnotherType_LoadsAsNull_WithAWarning()
         {
-            var other = Make<OtherSaveableAsset>();
+            var other = Make<OtherIdentifiedAsset>();
             other.name = "Other";
             other.SetId(AssetId.New());
             _catalog.SetAssets(new ScriptableObject[] { other });
@@ -146,13 +148,13 @@ namespace SaveSystem.Tests
             loading.Restore(SaveDocument.FromJson(json));
             Assert.That(loaded.Data.Main, Is.Null);
             Assert.That(loaded.Data.Other, Is.SameAs(other));
-            Assert.That(_log.Warnings.Single(), Does.Contain("not a TestSaveableAsset"));
+            Assert.That(_log.Warnings.Single(), Does.Contain("not a TestIdentifiedAsset"));
         }
 
         [Test]
         public void AssetWithoutAnId_IsSavedAsNothing_WithAWarning()
         {
-            var unassigned = Make<TestSaveableAsset>();
+            var unassigned = Make<TestIdentifiedAsset>();
             unassigned.name = "Unassigned";
             var loaded = RoundTrip(new LoadoutData { Main = unassigned }, out var saved);
             Assert.That(saved["Main"].Type, Is.EqualTo(JTokenType.Null));

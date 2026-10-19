@@ -1,42 +1,14 @@
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
+using Extensions.Ids;
 using NUnit.Framework;
+using Newtonsoft.Json.Linq;
 using SaveSystem.EditorTools;
-using UnityEditor;
-using UnityEditor.Build;
-using UnityEngine;
 
 namespace SaveSystem.Tests
 {
-    /** <summary>Editor cases found in review: idempotent fixing, the build check, and browser edits.</summary> */
+    /** <summary>Browser edits found in review: date-like strings, plain values, encrypted saves.</summary> */
     public sealed class EditorReviewTests
     {
-        private const string Folder = "Assets/SaveSystemTestTemp";
-
-        [SetUp]
-        public void SetUp()
-        {
-            if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets", "SaveSystemTestTemp");
-        }
-
-        [TearDown]
-        public void TearDown() => AssetDatabase.DeleteAsset(Folder);
-
-        [Test]
-        public void Fixing_Twice_ChangesNothingTheSecondTime()
-        {
-            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TestSaveableAsset>(), $"{Folder}/A.asset");
-            AssetIdFixer.FixAll();
-            Assert.That(AssetIdFixer.FixAll(), Is.Empty);
-        }
-
-        [Test]
-        public void BuildCheck_FailsOnAnAssetWithTwoIdFields()
-        {
-            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<TwoIdFieldsAsset>(), $"{Folder}/Two.asset");
-            Assert.Throws<BuildFailedException>(() => new AssetIdBuildCheck().OnPreprocessBuild(null));
-        }
-
         [Test]
         public async Task BrowserEdit_KeepsDateLikeStrings()
         {

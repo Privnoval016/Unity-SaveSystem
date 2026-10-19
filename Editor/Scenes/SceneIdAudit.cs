@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 namespace SaveSystem.EditorTools
@@ -126,6 +128,28 @@ namespace SaveSystem.EditorTools
             if (issues.Count == 0) Debug.Log("Save: scene ids are clean.");
             foreach (var issue in issues)
                 Debug.LogWarning($"Save: {issue}", AssetDatabase.LoadAssetAtPath<SceneAsset>(issue.ScenePath));
+        }
+
+        #endregion
+    }
+
+    /** <summary>Before every build: fails it if a scene's saved-world id is shared or missing.</summary> */
+    public sealed class SceneIdBuildCheck : IPreprocessBuildWithReport
+    {
+        #region Properties
+
+        /** <inheritdoc /> */
+        public int callbackOrder => 1;
+
+        #endregion
+
+        #region Public API
+
+        /** <inheritdoc /> */
+        public void OnPreprocessBuild(BuildReport report)
+        {
+            var blocking = SceneIdAudit.Run().Where(issue => issue.Problem != SceneIdProblem.NoSaveableScene).ToList();
+            if (blocking.Count > 0) throw new BuildFailedException("Save: scene id problems: " + string.Join("; ", blocking));
         }
 
         #endregion

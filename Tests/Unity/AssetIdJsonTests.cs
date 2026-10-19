@@ -1,12 +1,14 @@
-using Newtonsoft.Json;
+using Extensions.Ids;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 
 namespace SaveSystem.Tests
 {
-    /** <summary>Asset ids inside save data.</summary> */
+    /** <summary>Asset ids inside save data, through the serializer the save system builds.</summary> */
     public sealed class AssetIdJsonTests
     {
+        private static readonly SaveSerializer Serializer = UnitySave.CreateSerializer(null);
+
         public sealed class Holder
         {
             public AssetId Id;
@@ -16,7 +18,7 @@ namespace SaveSystem.Tests
         [Test]
         public void AssetIdField_RoundTripsAsItsHex()
         {
-            var serializer = new SaveSerializer();
+            var serializer = Serializer;
             var id = AssetId.New();
             var json = JToken.FromObject(new Holder { Id = id }, serializer.Json);
 
@@ -35,7 +37,7 @@ namespace SaveSystem.Tests
         public void Garbage_ReadsAsEmpty_AndTheRestStillLoads(string value)
         {
             var id = AssetId.New();
-            var loaded = JsonConvert.DeserializeObject<Holder>("{\"Id\":" + value + ",\"Empty\":\"" + id.Value + "\"}");
+            var loaded = Serializer.Parse(SaveSerializer.Utf8.GetBytes("{\"Id\":" + value + ",\"Empty\":\"" + id.Value + "\"}")).ToObject<Holder>(Serializer.Json);
             Assert.That(loaded.Id.IsEmpty);
             Assert.That(loaded.Empty, Is.EqualTo(id));
         }

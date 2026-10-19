@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 (2026-10-19)
+
+- **Asset ids moved to Unity-Extensions** (`Extensions.Ids`), so every module can use them. The save system now
+  references Extensions.
+  - Renamed: `ISaveableAsset` is now `IIdentifiedAsset`, and `SaveableAssets` is now `AssetIds`.
+  - The id menus are now under *Tools > Asset Ids*.
+  - What stays here: the JSON converters (`AssetIdJsonConverter` is registered by `UnitySave.CreateSerializer`),
+    world objects, the scene id audit and its own build check (`SceneIdBuildCheck`), and the browser.
+  - Nothing changes on disk.
+- **Tests:** 349 here (39 moved to Extensions).
+
 ## 0.3.0 (2026-10-19)
 
 From the second review, and a pass on scale.

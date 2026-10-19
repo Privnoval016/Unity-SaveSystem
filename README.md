@@ -4,7 +4,10 @@ A save system for Unity games that can be dropped into any project. Each system 
 save. Saves are versioned JSON, written safely in the background, with slots, autosaves, settings, references to
 assets by stable id, and saved world objects.
 
-- **Requires:** Unity 6, and Newtonsoft JSON (`com.unity.nuget.newtonsoft-json`) as a direct dependency.
+- **Requires:**
+  - Unity 6;
+  - Newtonsoft JSON (`com.unity.nuget.newtonsoft-json`) as a direct dependency;
+  - [Unity-Extensions](https://github.com/Privnoval016/Unity-Extensions), for asset ids. The Core doesn't need it.
 - **Namespace:** `SaveSystem` (editor tools: `SaveSystem.EditorTools`).
 
 ## Assemblies
@@ -254,56 +257,19 @@ The key ships with the game, so encryption stops casual editing, not a determine
 **Storage sits behind `ISaveStorage`.** `FileSaveStorage` keeps files in one folder; `MemorySaveStorage` is for
 tests. A console's or a cloud's storage would be another implementation.
 
-## Asset ids: saving references to assets
+## Saving references to assets
 
-A save can't point at an asset by name or path, because those change. An asset a save may point at implements
-`ISaveableAsset` and holds one `AssetId` field:
-
-```csharp
-public sealed class ItemDefinition : ScriptableObject, ISaveableAsset
-{
-    [Tooltip("Filled in by the editor.")]
-    [SerializeField] private AssetId assetId;
-
-    public AssetId AssetId => assetId;
-}
-```
-
-**The editor fills the id in**, with no typing:
-
-- A new asset gets its file's GUID.
-- A **duplicated** asset gets an id of its own. The original, the one whose GUID it is, keeps its id.
-- An id once stored **never changes**, even if the asset's `.meta` file is regenerated, so saves keep working.
+Asset ids live in Unity-Extensions (`Extensions.Ids`): `AssetId`, `IIdentifiedAsset`, `AssetCatalog`, the editor
+that assigns them, and their audit. See the Extensions README. An asset a save may point at implements
+`IIdentifiedAsset` and holds one `AssetId` field; the editor fills it in.
 
 **Saving a reference needs no code.** A data class just holds the asset: `public ItemDefinition Item;`. The
-serializer from `UnitySave.CreateSerializer(catalog)` writes its id and finds the asset again on load. An id
-with no asset, or with an asset of the wrong type, loads as null with one warning. An `AssetId` field saves as its
-32 hex digits.
+serializer from `UnitySave.CreateSerializer(catalog)` writes its id and finds the asset again through the catalog
+on load.
 
-**Builds find assets through an `AssetCatalog`.** Create one with *Create > Save System > Asset Catalog* and pass
-it to `CreateSerializer`. The editor keeps it filled:
-
-- on every import;
-- before every build;
-- from *Tools > Save System > Rebuild Asset Catalog*.
-
-The catalog references every saveable asset, so they load with it.
-
-**It keeps up as the game grows.** Each import loads only the changed files and those sharing their ids, and the
-project is scanned once per session. When a type becomes saveable (`ISaveableAsset` added to it), its existing
-assets get ids automatically after the next compile.
-
-**The audit checks every saveable asset** (*Tools > Save System > Audit Asset Ids*):
-
-- it has exactly one id field;
-- it has an id;
-- the id is unique;
-- every catalog lists it.
-
-A build fails if any id is still missing or shared after the automatic fix.
-
-The resolver accepts any Unity object, so a resolver that loads assets by id on demand (through Addressables, say)
-can replace the catalog when there are too many heavy assets to keep loaded. That needs no change to saves.
+- **An id with no asset, or with an asset of the wrong type,** loads as null with one warning.
+- **An `AssetId` field** saves as its 32 hex digits. The converter for it is registered by `CreateSerializer`, since
+  Extensions doesn't depend on Newtonsoft.
 
 ## World objects
 
@@ -311,7 +277,7 @@ For things in a scene that remember their state, such as chests, doors, levers a
 
 1. **Add a `SaveableScene`** to each scene that saves. It takes its id from the scene's GUID. A scene copied from
    another needs *New Scene Id* from its context menu. *Tools > Save System > Audit Scene Ids* finds copies
-   sharing an id, and scenes with entities but no `SaveableScene`. A build fails on a shared or missing id.
+   sharing an id, and scenes with entities but no `SaveableScene`. A build fails on a shared or missing scene id.
 2. **Add a `SaveableEntity`** to each object that saves. The editor gives each one an id that is unique in the
    scene, and a duplicated object gets a new id.
 3. **Write its saved components** as `SaveableComponent<TData>`, with a key, plus a version and upgrades if they
@@ -346,9 +312,6 @@ service.Unregister(section); // holds the scene's state until it loads again
 | Tool | What it does |
 |---|---|
 | **Save Browser** | Lists the saves and settings in a folder. Shows each section's version and data. Edits a section and writes the save back with a fresh checksum (the old file becomes the backup). Deletes a save and its header. Opens the folder |
-| **Fix Asset Ids** | Gives every saveable asset missing or sharing an id its own |
-| **Rebuild Asset Catalog** | Fills every catalog now |
-| **Audit Asset Ids** | Logs every asset id problem |
 | **Audit Scene Ids** | Logs every scene id problem, reading scene files without opening them |
 
 The browser reads plain and gzip saves. Code that opens `SaveBrowserModel` itself can pass the AES transforms the
