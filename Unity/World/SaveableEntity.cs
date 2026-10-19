@@ -100,7 +100,7 @@ namespace SaveSystem
         private static Dictionary<string, SaveableEntity> IdsIn(Scene scene, SaveableEntity asking)
         {
             var ids = new Dictionary<string, SaveableEntity>(StringComparer.Ordinal);
-            foreach (var entity in FindObjectsByType<SaveableEntity>(FindObjectsInactive.Include, FindObjectsSortMode.InstanceID))
+            foreach (var entity in FindObjectsByType<SaveableEntity>(FindObjectsInactive.Include))
                 if (entity != asking && entity.gameObject.scene == scene && !string.IsNullOrEmpty(entity.entityId) && !ids.ContainsKey(entity.entityId))
                     ids.Add(entity.entityId, entity);
             return ids;

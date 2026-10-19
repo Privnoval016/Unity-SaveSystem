@@ -117,13 +117,13 @@ namespace SaveSystem.Tests
                 load = slots.LoadAsync(SlotId.Manual(1));
                 await Task.Delay(300);
                 Assert.That(load.IsCompleted, Is.False);
+                _counter.Value = 0;
             }
             finally
             {
                 storage.WriteGate.Set();
             }
             await save;
-            _counter.Value = 0;
             await load;
             Assert.That(_counter.Value, Is.EqualTo(2));
         }
