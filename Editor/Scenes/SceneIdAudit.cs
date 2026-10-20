@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Extensions.Menus;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -121,7 +122,7 @@ namespace SaveSystem.EditorTools
             .Select(AssetDatabase.AssetPathToGUID)
             .FirstOrDefault() ?? string.Empty;
 
-        [MenuItem("Tools/Save System/Audit Scene Ids")]
+        [MenuItem(SaveMenus.Tools + "Audit Scene Ids", priority = ToolMenus.Commands)]
         private static void RunFromMenu()
         {
             var issues = Run();

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Extensions.Menus;
 using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
@@ -55,7 +56,7 @@ namespace SaveSystem.EditorTools
         #region Public API
 
         /** <summary>Opens the window.</summary> */
-        [MenuItem("Tools/Save System/Save Browser")]
+        [MenuItem(SaveMenus.Tools + "Save Browser", priority = ToolMenus.Windows)]
         public static void Open() => GetWindow<SaveBrowserWindow>();
 
         #endregion

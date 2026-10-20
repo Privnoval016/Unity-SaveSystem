@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Menus moved under one Privnoval heading: *Tools > Privnoval > Save System* and *Add Component > Privnoval > Save System*.
+
 ## 0.4.0 (2026-10-19)
 
 - **Asset ids moved to Unity-Extensions** (`Extensions.Ids`), so every module can use them. The save system now

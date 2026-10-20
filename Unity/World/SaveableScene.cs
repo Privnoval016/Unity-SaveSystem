@@ -16,6 +16,7 @@ namespace SaveSystem
      * </remarks>
      */
     [DisallowMultipleComponent]
+    [AddComponentMenu(SaveMenus.Component + "Saveable Scene")]
     public sealed class SaveableScene : MonoBehaviour
     {
         #region Inspector Fields

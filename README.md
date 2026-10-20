@@ -276,7 +276,7 @@ on load.
 For things in a scene that remember their state, such as chests, doors, levers and pickups:
 
 1. **Add a `SaveableScene`** to each scene that saves. It takes its id from the scene's GUID. A scene copied from
-   another needs *New Scene Id* from its context menu. *Tools > Save System > Audit Scene Ids* finds copies
+   another needs *New Scene Id* from its context menu. *Tools > Privnoval > Save System > Audit Scene Ids* finds copies
    sharing an id, and scenes with entities but no `SaveableScene`. A build fails on a shared or missing scene id.
 2. **Add a `SaveableEntity`** to each object that saves. The editor gives each one an id that is unique in the
    scene, and a duplicated object gets a new id.
@@ -307,7 +307,7 @@ service.Unregister(section); // holds the scene's state until it loads again
 
 ## Tools
 
-*Tools > Save System* in the editor:
+*Tools > Privnoval > Save System* in the editor:
 
 | Tool | What it does |
 |---|---|

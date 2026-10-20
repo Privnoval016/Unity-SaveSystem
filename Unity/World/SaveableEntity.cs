@@ -15,6 +15,7 @@ namespace SaveSystem
      * (a picked-up item) is remembered.</summary>
      */
     [DisallowMultipleComponent]
+    [AddComponentMenu(SaveMenus.Component + "Saveable Entity")]
     public sealed class SaveableEntity : MonoBehaviour
     {
         #region Inspector Fields
