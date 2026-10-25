@@ -42,6 +42,7 @@ every finding fixed, each with tests in `Tests/Core/Failsafes`.
   capture time; `ListAsync(checkSaves: true)` reads each save (`SlotSaveState`), rewrites stale, missing and damaged
   headers; autosave ranks a slot by the higher of its header's and its save's sequence.
 - **A section that fails to capture as it unregisters** keeps its last saved state.
+- **`Unregister(section, keepState: false)`** forgets a section's state (an area left whose world resets).
 - **Gzip** unpacks at most 256 MB by default.
 - **`SaveStorageContractTests`**: an abstract fixture a storage backend subclasses to prove it keeps the contract.
 - Menus moved under one Privnoval heading: *Tools > Privnoval > Save System* and

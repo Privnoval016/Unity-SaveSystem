@@ -283,6 +283,20 @@ namespace SaveSystem.Tests
         }
 
         [Test]
+        public void UnregisteringWithoutKeepingState_ForgetsIt_SoItStartsAfreshNextTime()
+        {
+            var service = new SaveService();
+            var area = new CounterSection("area") { DefaultValue = 0 };
+            service.Register(area);
+            service.Restore(Saved(("area", 4)));
+            service.Unregister(area, keepState: false);
+            Assert.That((service.HeldKeys.Count, service.Capture().Sections.ContainsKey("area")), Is.EqualTo((0, false)));
+            var again = new CounterSection("area") { Value = 9 };
+            Assert.That(service.Register(again).Outcome, Is.EqualTo(SectionOutcome.Unchanged));
+            Assert.That(again.Value, Is.EqualTo(9), "nothing held, so it keeps the state the scene gave it");
+        }
+
+        [Test]
         public void ALateRegisteredSectionThatFails_IsNotAReset_TheRestOfTheGameIsLoaded()
         {
             var service = new SaveService();

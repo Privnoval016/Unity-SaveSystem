@@ -122,12 +122,21 @@ namespace SaveSystem
 
         /**
          * <summary>Removes a section, keeping its current state held so it is saved and restored on the next register. A
-         * section that fails to capture keeps the state it was last restored with or saved as.</summary>
+         * section that fails to capture keeps the state it was last restored with or saved as. With
+         * <paramref name="keepState" /> false its state is forgotten instead (an area left whose world resets): the next
+         * save has none, and it starts afresh when it registers again.</summary>
          */
-        public void Unregister(ISaveSection section)
+        public void Unregister(ISaveSection section, bool keepState = true)
         {
             if (section == null || !Remove(section)) return;
             var key = section.Key;
+            if (!keepState)
+            {
+                _held.Remove(key);
+                _pinned.Remove(key);
+                _last.Remove(key);
+                return;
+            }
             if (_pinned.TryGetValue(key, out var pinned))
                 _held[key] = pinned;
             else

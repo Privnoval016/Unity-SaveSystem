@@ -440,6 +440,7 @@ var section = SaveableScene.FindIn(scene).CreateSection(serializer);
 service.Register(section);   // restores the scene from the loaded save, if it has data
 ...
 service.Unregister(section); // holds the scene's state until it loads again
+service.Unregister(section, keepState: false); // or forgets it: an area left whose world resets
 ```
 
 - **Each entity is its own small save.** Its components can upgrade, a removed component's data is kept, and one
