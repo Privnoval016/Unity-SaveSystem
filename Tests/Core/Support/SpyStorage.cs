@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace SaveSystem.Tests
 {
-    /** <summary>Storage over memory that counts reads, can fail writes, and can hold a write until released.</summary> */
+    /** <summary>Storage over memory that counts reads, can fail reads, writes, repairs and listing, and can hold a read or a write until released.</summary> */
     public sealed class SpyStorage : ISaveStorage
     {
         #region Private Fields
@@ -24,6 +24,8 @@ namespace SaveSystem.Tests
         public Func<string, bool> FailRepair { get; set; } = _ => false;
         public Func<string, bool> FailRead { get; set; } = _ => false;
         public bool FailReadPending { get; set; }
+        public bool FailList { get; set; }
+        public ManualResetEventSlim ReadGate { get; } = new ManualResetEventSlim(true);
         public ManualResetEventSlim WriteGate { get; } = new ManualResetEventSlim(true);
         public ManualResetEventSlim WriteStarted { get; } = new ManualResetEventSlim(false);
 
@@ -48,6 +50,7 @@ namespace SaveSystem.Tests
 
         public byte[] Read(string name)
         {
+            if (!ReadGate.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("read gate never opened");
             Count(name);
             if (FailRead(name)) throw new IOException("held by another program");
             return Inner.Read(name);
@@ -84,7 +87,7 @@ namespace SaveSystem.Tests
 
         public void Delete(string name) => Inner.Delete(name);
 
-        public IReadOnlyList<string> List() => Inner.List();
+        public IReadOnlyList<string> List() => FailList ? throw new IOException("listing broke") : Inner.List();
 
         #endregion
 
