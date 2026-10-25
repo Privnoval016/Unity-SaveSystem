@@ -77,12 +77,42 @@ namespace SaveSystem
             return deepest;
         }
 
-        /** <summary>Writes a JSON tree as UTF-8 text without a byte order mark.</summary> */
+        /**
+         * <summary>Puts every object's properties in ordinal order, at every depth, in place; lists keep their order. The
+         * same data then always writes the same bytes, whatever order a dictionary or set gave it.</summary>
+         * <returns>The same token.</returns>
+         */
+        public static JToken Canonical(JToken json)
+        {
+            var pending = new Stack<JToken>();
+            pending.Push(json);
+            while (pending.Count > 0)
+            {
+                var token = pending.Pop();
+                if (token is JObject obj)
+                {
+                    var properties = new List<JProperty>(obj.Properties());
+                    properties.Sort((a, b) => string.CompareOrdinal(a.Name, b.Name));
+                    obj.RemoveAll();
+                    foreach (var property in properties)
+                    {
+                        obj.Add(property);
+                        pending.Push(property.Value);
+                    }
+                }
+                else if (token is JArray array)
+                    foreach (var item in array)
+                        pending.Push(item);
+            }
+            return json;
+        }
+
+        /** <summary>Writes a JSON tree as UTF-8 text without a byte order mark, lines ending in LF on every platform.</summary> */
         public byte[] ToBytes(JToken json, bool indented)
         {
             using (var stream = new MemoryStream())
             {
-                using (var text = new StreamWriter(stream, Utf8))
+                using (var text = TextWriterFor(stream))
                 using (var writer = new JsonTextWriter(text))
                 {
                     writer.Formatting = indented ? Formatting.Indented : Formatting.None;
@@ -95,6 +125,9 @@ namespace SaveSystem
                 return stream.ToArray();
             }
         }
+
+        /** <summary>The text writer saves are written through: UTF-8 without a byte order mark, LF line endings on every platform.</summary> */
+        internal static StreamWriter TextWriterFor(Stream stream) => new StreamWriter(stream, Utf8) { NewLine = "\n" };
 
         /**
          * <summary>Reads UTF-8 JSON text into a tree.</summary>

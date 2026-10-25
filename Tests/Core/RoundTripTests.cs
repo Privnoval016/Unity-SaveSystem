@@ -204,7 +204,7 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void RestoreThrowing_ReportsIt_AndRestoresTheOthers()
+        public void RestoreThrowing_ReportsIt_AndPutsEverySectionBack()
         {
             var saving = new SaveService();
             saving.Register(new CounterSection("a") { Value = 1 });
@@ -213,16 +213,44 @@ namespace SaveSystem.Tests
 
             var log = new RecordingLog();
             var loading = new SaveService(log: log);
-            var a = new CounterSection("a") { ThrowOnRestore = true };
-            var b = new CounterSection("b");
+            var a = new CounterSection("a") { Value = 8, ThrowOnRestoreOf = 1 };
+            var b = new CounterSection("b") { Value = 9 };
             loading.Register(a);
             loading.Register(b);
             var result = loading.Restore(document);
 
-            Assert.That(result.Status, Is.EqualTo(LoadStatus.RestoreFailed));
+            Assert.That((result.Status, result.RolledBack, result.LeftStateUnchanged), Is.EqualTo((LoadStatus.RestoreFailed, true, true)));
             Assert.That(result.Sections.Single(report => report.Key == "a").Outcome, Is.EqualTo(SectionOutcome.Failed));
-            Assert.That(b.Value, Is.EqualTo(2));
+            Assert.That((a.Value, b.Value), Is.EqualTo((8, 9)), "b was restored, then put back");
             Assert.That(log.Errors, Has.Count.EqualTo(1));
+            Assert.That(loading.PinnedKeys, Is.Empty);
+        }
+
+        [Test]
+        public void ASectionThatCantBePutBack_IsSavedWithItsLastGoodData_UntilALoadRestoresIt()
+        {
+            var saving = new SaveService();
+            saving.Register(new CounterSection("a") { Value = 1 });
+            saving.Register(new CounterSection("b") { Value = 2 });
+            var document = ThroughBytes(saving);
+
+            var log = new RecordingLog();
+            var loading = new SaveService(log: log);
+            var a = new CounterSection("a") { Value = 8, ThrowOnRestore = true };
+            var b = new CounterSection("b") { Value = 9 };
+            loading.Register(a);
+            loading.Register(b);
+            var result = loading.Restore(document);
+
+            Assert.That((result.Status, result.RolledBack, result.LeftStateUnchanged), Is.EqualTo((LoadStatus.RestoreFailed, false, false)));
+            Assert.That(loading.PinnedKeys, Is.EqualTo(new[] { "a" }));
+            Assert.That(b.Value, Is.EqualTo(9), "everything that could be put back was");
+            a.Value = 77;
+            Assert.That(loading.Capture().Sections["a"].Data["Value"].ToObject<int>(), Is.EqualTo(8), "a is saved as it was before the load, never its half-restored state");
+
+            a.ThrowOnRestore = false;
+            Assert.That(loading.Restore(document).Succeeded);
+            Assert.That((loading.PinnedKeys.Count, a.Value), Is.EqualTo((0, 1)));
         }
 
         [Test]

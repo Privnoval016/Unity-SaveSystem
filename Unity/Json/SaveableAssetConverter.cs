@@ -10,8 +10,10 @@ namespace SaveSystem
     /**
      * <summary>Saves a reference to a saveable asset as its id, and finds the asset again on load.</summary>
      * <remarks>
-     * Data classes hold the asset itself (any type that is an <see cref="IIdentifiedAsset" />). An id with no asset, or
-     * with an asset of another type, loads as null with one warning per id.
+     * Data classes hold the asset itself (any type that is an <see cref="IIdentifiedAsset" />). What happens to an asset
+     * with no id, an id with no asset, or an asset of another type is the <see cref="UnresolvedAssets" /> policy: by
+     * default the save or load fails. Data that must keep ids the game may not have (items from a removed pack) holds
+     * the ids as text instead.
      * </remarks>
      */
     public sealed class SaveableAssetConverter : JsonConverter
@@ -20,6 +22,7 @@ namespace SaveSystem
 
         private readonly IAssetResolver _assets;
         private readonly ISaveLog _log;
+        private readonly UnresolvedAssets _unresolved;
 
         #endregion
 
@@ -31,11 +34,12 @@ namespace SaveSystem
 
         #region Public API
 
-        /** <summary>Makes a converter that finds assets through the resolver.</summary> */
-        public SaveableAssetConverter(IAssetResolver assets, ISaveLog log = null)
+        /** <summary>Makes a converter that finds assets through the resolver, failing on what it can't resolve unless told otherwise.</summary> */
+        public SaveableAssetConverter(IAssetResolver assets, ISaveLog log = null, UnresolvedAssets unresolved = UnresolvedAssets.Fail)
         {
             _assets = assets ?? throw new ArgumentNullException(nameof(assets));
             _log = log ?? UnitySaveLog.Instance;
+            _unresolved = unresolved;
         }
 
         /** <inheritdoc /> */
@@ -44,15 +48,21 @@ namespace SaveSystem
         /** <inheritdoc /> */
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
             var asset = value as Object;
             if (asset == null)
             {
+                Unresolved(value.GetType().Name, value is Object ? $"Save: a {value.GetType().Name} reference points at a destroyed asset" : $"Save: {value.GetType().Name} is not a Unity asset, so it has no asset id");
                 writer.WriteNull();
                 return;
             }
             if (!AssetIds.TryGetId(asset, out var id))
             {
-                WarnOnce(asset.name, $"Save: {asset.name} has no asset id; saved as nothing.");
+                Unresolved(asset.name, $"Save: {asset.name} has no asset id");
                 writer.WriteNull();
                 return;
             }
@@ -67,17 +77,17 @@ namespace SaveSystem
             reader.Skip();
             if (!AssetId.TryParse(text, out var id))
             {
-                WarnOnce(text ?? reader.TokenType.ToString(), $"Save: '{text ?? reader.TokenType.ToString()}' is not an asset id.");
+                Unresolved(text ?? reader.TokenType.ToString(), $"Save: '{text ?? reader.TokenType.ToString()}' is not an asset id");
                 return null;
             }
             if (!_assets.TryFind(id, out var asset))
             {
-                WarnOnce(id.Value, $"Save: no asset has id {id}.");
+                Unresolved(id.Value, $"Save: no asset has id {id}");
                 return null;
             }
             if (!objectType.IsInstanceOfType(asset))
             {
-                WarnOnce(id.Value, $"Save: asset {asset.name} ({id}) is not a {objectType.Name}.");
+                Unresolved(id.Value, $"Save: asset {asset.name} ({id}) is not a {objectType.Name}");
                 return null;
             }
             return asset;
@@ -87,9 +97,11 @@ namespace SaveSystem
 
         #region Helpers
 
-        private void WarnOnce(string key, string message)
+        /** <summary>Fails the save or load under <see cref="UnresolvedAssets.Fail" />; otherwise warns once for the key and lets it be null.</summary> */
+        private void Unresolved(string key, string message)
         {
-            if (_warned.Add(key)) _log.Warning(message);
+            if (_unresolved == UnresolvedAssets.Fail) throw new JsonSerializationException(message + ".");
+            if (_warned.Add(key)) _log.Warning(message + "; it is saved and loaded as nothing.");
         }
 
         #endregion

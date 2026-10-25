@@ -17,6 +17,7 @@ namespace SaveSystem.Tests
         public bool Open { get; set; }
         public int Coins { get; set; } = 10;
         public bool ThrowOnRestore { get; set; }
+        public int? ThrowOnRestoreOf { get; set; }
         public bool ThrowOnCapture { get; set; }
 
         public override string Key => "chest";
@@ -26,7 +27,7 @@ namespace SaveSystem.Tests
 
         protected override void RestoreState(ChestData data)
         {
-            if (ThrowOnRestore) throw new InvalidOperationException("chest broke");
+            if (ThrowOnRestore || data.Coins == ThrowOnRestoreOf) throw new InvalidOperationException("chest broke");
             Open = data.Open;
             Coins = data.Coins;
         }

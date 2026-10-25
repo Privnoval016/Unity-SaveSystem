@@ -1,9 +1,58 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-25)
 
+From an audit and a five-viewpoint review (correctness, crash safety and concurrency, API, tests, an adversary):
+every finding fixed, each with tests in `Tests/Core/Failsafes`.
+
+- **Breaking changes** (migrating below):
+  - `ISaveStorage` gains `ReadPending`, `CommitPending` and `Repair`; `Delete` removes the entry last; `List`
+    includes an entry with only a pending write.
+  - `ReadResult` takes a `ReadSource` instead of a used-backup flag (`UsedBackup` still reads).
+  - New enum values a `switch` must handle: `LoadStatus.Busy`, `LoadStatus.Unreadable`, `SaveStatus.TooNew`,
+    `SaveStatus.Busy`, `ReadStatus.TooNew`, `ReadStatus.Unreadable`, `DecodeStatus.TooNew`,
+    `SlotHeaderState.TooNew`.
+  - Asset references that can't be resolved fail the save or load by default (`UnresolvedAssets.Fail`), a destroyed
+    asset included; pass `UnresolvedAssets.LoadAsNull` to `UnitySave.CreateSerializer` for the old behaviour.
+  - A failed restore is put back (below), where it used to leave the other sections restored.
+  - Section JSON is written in ordinal property order, so files written before differ in layout (they load the same),
+    and a dictionary read back enumerates in key order.
+  - A file in a newer build's file format reads as `TooNew`, not damaged.
+- **A load never leaves a half-loaded game.** A section that throws while applying or settling puts every section
+  back as it was (`LoadResult.RolledBack`, `LeftStateUnchanged`); a new game the same. Sections that can't be put back
+  are saved with their last good data (`SaveService.PinnedKeys`) and the result says `NeedsReset`.
+- **`ISettlesAfterRestore`**: state derived from other sections settles once every section is back. A settle throw
+  as a section registers leaves it unregistered with its data held.
+- **Nothing saves or starts a new game during a load**: saves, autosaves, loads and `SaveSlots.NewGame()` asked for
+  while a load runs return `Busy` (`SaveSlots.Loading`, `SettingsStore.Loading`).
+- **A newer build's save is never lost to an older build**: a newer file format, document format or section version
+  (`SaveService.IsFromNewerBuild`, safe on the worker thread), in the save, its backup or a pending write, reads as
+  `TooNew`, is never replaced by anything older, and is never written over; autosave rotates around such a slot, and
+  around one that can't be read just now.
+- **Writes**: `File.Replace` instead of deleting the backup first, with a fallback where it isn't supported; a blocked
+  move or read is retried (I/O errors three times, access errors once); a failed write removes its temp file, except
+  a whole one after a swap failed halfway; a whole temp file left by a crash is read and moved (never rewritten) into
+  place; repairing from the backup keeps the backup and only repairs real damage (never another key's file); a
+  backup is good only when it parses.
+- **Reads**: a file that is there but can't be read (the save, its backup or a pending write) is `Unreadable`,
+  never replaced by anything older.
+- **Determinism**: LF line endings everywhere; properties in ordinal order at every depth (dictionaries and scene
+  entities no longer leak their order); a token another JSON tree holds is copied before it is sorted.
+- **Slots**: a slot write never throws (failures are results, unexpected ones logged); the header's time is the
+  capture time; `ListAsync(checkSaves: true)` reads each save (`SlotSaveState`), rewrites stale, missing and damaged
+  headers; autosave ranks a slot by the higher of its header's and its save's sequence.
+- **A section that fails to capture as it unregisters** keeps its last saved state.
+- **Gzip** unpacks at most 256 MB by default.
+- **`SaveStorageContractTests`**: an abstract fixture a storage backend subclasses to prove it keeps the contract.
 - Menus moved under one Privnoval heading: *Tools > Privnoval > Save System* and
   *Add Component > Privnoval > Save System*.
+
+**Migrating from 0.4:**
+- A custom `ISaveStorage`: add `ReadPending` (null if your puts are atomic), `CommitPending` (nothing, likewise) and
+  `Repair` (replace the entry, keep the backup); delete the entry last. Subclass `SaveStorageContractTests`.
+- Code that built `ReadResult` passes a `ReadSource`.
+- Handle the new statuses; treat `LoadResult.NeedsReset` as fatal.
+- Data that held asset references which may disappear: hold their ids as text, or opt into `LoadAsNull`.
 
 ## 0.4.0 (2026-10-19)
 

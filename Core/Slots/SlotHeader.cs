@@ -69,6 +69,25 @@ namespace SaveSystem
         Missing,
         /** <summary>The header is damaged. Loading or repairing the slot rewrites it.</summary> */
         Damaged,
+        /** <summary>The header was written by a newer build; its slot is not this build's to write over.</summary> */
+        TooNew,
+    }
+
+    /** <summary>Whether a slot's save loads, found by reading it (<c>ListAsync(checkSaves: true)</c>).</summary> */
+    public enum SlotSaveState
+    {
+        /** <summary>Not read: the list read headers only.</summary> */
+        Unchecked,
+        /** <summary>The save reads.</summary> */
+        Ok,
+        /** <summary>The save is damaged and its backup reads: loading it loads the backup.</summary> */
+        FromBackup,
+        /** <summary>Neither the save nor its backup reads.</summary> */
+        Damaged,
+        /** <summary>A newer build wrote it: this build can't load it, and won't write over it.</summary> */
+        TooNew,
+        /** <summary>The file is there but couldn't be read just now (another program holds it); not damaged, as far as is known.</summary> */
+        Unreadable,
     }
 
     /** <summary>One slot as the save screen lists it.</summary> */
@@ -85,16 +104,24 @@ namespace SaveSystem
         /** <summary>Its header; null unless <see cref="SlotHeaderState.Ok" />.</summary> */
         public SlotHeader<TInfo> Header { get; }
 
+        /** <summary>Whether its save loads; <see cref="SlotSaveState.Unchecked" /> unless the list read the saves.</summary> */
+        public SlotSaveState SaveState { get; }
+
+        /** <summary>What is wrong with its save or why its backup was used; null when nothing is or it was not read.</summary> */
+        public string SaveProblem { get; }
+
         #endregion
 
         #region Public API
 
         /** <summary>Makes a summary.</summary> */
-        public SlotSummary(SlotId slot, SlotHeaderState state, SlotHeader<TInfo> header)
+        public SlotSummary(SlotId slot, SlotHeaderState state, SlotHeader<TInfo> header, SlotSaveState saveState = SlotSaveState.Unchecked, string saveProblem = null)
         {
             Slot = slot;
             State = state;
             Header = header;
+            SaveState = saveState;
+            SaveProblem = saveProblem;
         }
 
         #endregion

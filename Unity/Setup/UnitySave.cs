@@ -33,11 +33,11 @@ namespace SaveSystem
         public static ISaveWorker CreateWorker() =>
             Application.platform == RuntimePlatform.WebGLPlayer ? (ISaveWorker)new ImmediateSaveWorker() : new BackgroundSaveWorker();
 
-        /** <summary>A serializer that writes engine value types, and saveable assets as their ids.</summary> */
-        public static SaveSerializer CreateSerializer(IAssetResolver assets, ISaveLog log = null)
+        /** <summary>A serializer that writes engine value types, and saveable assets as their ids; what can't be resolved fails the save or load unless <paramref name="unresolved" /> says otherwise.</summary> */
+        public static SaveSerializer CreateSerializer(IAssetResolver assets, ISaveLog log = null, UnresolvedAssets unresolved = UnresolvedAssets.Fail)
         {
             var converters = new List<JsonConverter>(UnityValueConverters.Create()) { new AssetIdJsonConverter() };
-            if (assets != null) converters.Add(new SaveableAssetConverter(assets, log));
+            if (assets != null) converters.Add(new SaveableAssetConverter(assets, log, unresolved));
             return new SaveSerializer(converters);
         }
 

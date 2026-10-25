@@ -37,13 +37,16 @@ namespace SaveSystem
         }
 
         /** <summary>Captures the settings now and writes them in the background.</summary> */
-        public Task<SaveResult> SaveAsync() => _documents.SaveAsync(document => _store.Write(Entry, document.ToJson()));
+        public Task<SaveResult> SaveAsync() => _documents.SaveAsync(document => _store.Write(Entry, document.ToJson(), _documents.Service.IsFromNewerBuild));
 
         /** <summary>Reads the settings in the background, then restores them on the calling thread.</summary> */
         public Task<LoadResult> LoadAsync() => _documents.LoadAsync(() => _store.Read(Entry, SaveDocument.FromJson));
 
         /** <summary>Blocks until pending writes finish, or the timeout passes.</summary> <returns>True when all finished.</returns> */
         public bool Flush(TimeSpan timeout) => _documents.Flush(timeout);
+
+        /** <summary>True while a load is under way: a save or load asked for now returns <c>Busy</c>.</summary> */
+        public bool Loading => _documents.Loading;
 
         #endregion
     }

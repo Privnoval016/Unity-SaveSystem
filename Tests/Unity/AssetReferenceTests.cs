@@ -11,7 +11,11 @@ using UnityEngine;
 
 namespace SaveSystem.Tests
 {
-    /** <summary>Saving references to assets as ids and finding them again through the catalog.</summary> */
+    /**
+     * <summary>Saving references to assets as ids and finding them again through the catalog. By default what can't be
+     * resolved fails: a missing asset, one of another type or garbage fails the section's load and changes nothing; an
+     * asset with no id refuses the save. Allowed as null, each loads or saves as nothing with one warning.</summary>
+     */
     public sealed class AssetReferenceTests
     {
         public sealed class LoadoutData
@@ -67,17 +71,17 @@ namespace SaveSystem.Tests
             return asset;
         }
 
-        private SaveService Service() => new SaveService(UnitySave.CreateSerializer(_catalog, _log));
+        private SaveService Service(UnresolvedAssets unresolved = UnresolvedAssets.Fail) => new SaveService(UnitySave.CreateSerializer(_catalog, _log, unresolved));
 
-        private LoadoutData RoundTrip(LoadoutData data, out JToken saved)
+        private LoadoutData RoundTrip(LoadoutData data, out JToken saved, UnresolvedAssets unresolved = UnresolvedAssets.Fail)
         {
-            var saving = Service();
+            var saving = Service(unresolved);
             saving.Register(new LoadoutSection { Data = data });
             saved = saving.Capture().Sections["loadout"].Data;
             var serializer = new SaveSerializer();
             var document = SaveDocument.FromJson(serializer.Parse(serializer.ToBytes(saving.Capture().ToJson(), true)));
 
-            var loading = Service();
+            var loading = Service(unresolved);
             var section = new LoadoutSection();
             loading.Register(section);
             Assert.That(loading.Restore(document).Succeeded);
@@ -118,10 +122,30 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void MissingAsset_LoadsAsNull_WithOneWarning()
+        public void MissingAsset_FailsTheLoad_AndChangesNothing()
         {
             var sword = MakeSaveable("Sword");
-            var loaded = RoundTrip(new LoadoutData { Main = sword, Bag = { sword, sword } }, out _);
+            _catalog.SetAssets(new ScriptableObject[] { sword });
+            var saving = Service();
+            saving.Register(new LoadoutSection { Data = new LoadoutData { Main = sword, Bag = { sword } } });
+            var document = saving.Capture();
+            _catalog.SetAssets(new ScriptableObject[0]);
+
+            var loading = Service();
+            var kept = new LoadoutData();
+            var section = new LoadoutSection { Data = kept };
+            loading.Register(section);
+            var result = loading.Restore(document);
+            Assert.That((result.Status, result.LeftStateUnchanged), Is.EqualTo((LoadStatus.SectionFailed, true)));
+            Assert.That(result.Problem, Does.Contain(sword.AssetId.Value));
+            Assert.That(section.Data, Is.SameAs(kept));
+        }
+
+        [Test]
+        public void MissingAsset_AllowedAsNull_LoadsAsNull_WithOneWarning()
+        {
+            var sword = MakeSaveable("Sword");
+            var loaded = RoundTrip(new LoadoutData { Main = sword, Bag = { sword, sword } }, out _, UnresolvedAssets.LoadAsNull);
             Assert.That(loaded.Main, Is.Null);
             Assert.That(loaded.Bag, Is.EqualTo(new Object[] { null, null }));
             Assert.That(_log.Warnings, Has.Count.EqualTo(1));
@@ -129,20 +153,35 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void AssetOfAnotherType_LoadsAsNull_WithAWarning()
+        public void AssetOfAnotherType_FailsTheLoad()
+        {
+            var other = Make<OtherIdentifiedAsset>();
+            other.name = "Other";
+            other.SetId(AssetId.New());
+            _catalog.SetAssets(new ScriptableObject[] { other });
+            var json = JObject.Parse("{\"format\":1,\"sections\":{\"loadout\":{\"version\":1,\"data\":{\"Main\":\"" + other.AssetId.Value + "\"}}}}");
+            var loading = Service();
+            loading.Register(new LoadoutSection());
+            var result = loading.Restore(SaveDocument.FromJson(json));
+            Assert.That(result.Status, Is.EqualTo(LoadStatus.SectionFailed));
+            Assert.That(result.Problem, Does.Contain("not a TestIdentifiedAsset"));
+        }
+
+        [Test]
+        public void AssetOfAnotherType_AllowedAsNull_LoadsAsNull_WithAWarning()
         {
             var other = Make<OtherIdentifiedAsset>();
             other.name = "Other";
             other.SetId(AssetId.New());
             _catalog.SetAssets(new ScriptableObject[] { other });
 
-            var saving = Service();
+            var saving = Service(UnresolvedAssets.LoadAsNull);
             var section = new LoadoutSection { Data = new LoadoutData { Other = other } };
             saving.Register(section);
             var json = saving.Capture().ToJson();
             json["sections"]["loadout"]["data"]["Main"] = other.AssetId.Value;
 
-            var loading = Service();
+            var loading = Service(UnresolvedAssets.LoadAsNull);
             var loaded = new LoadoutSection();
             loading.Register(loaded);
             loading.Restore(SaveDocument.FromJson(json));
@@ -152,22 +191,43 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void AssetWithoutAnId_IsSavedAsNothing_WithAWarning()
+        public void AssetWithoutAnId_RefusesTheSave()
         {
             var unassigned = Make<TestIdentifiedAsset>();
             unassigned.name = "Unassigned";
-            var loaded = RoundTrip(new LoadoutData { Main = unassigned }, out var saved);
+            var saving = Service();
+            saving.Register(new LoadoutSection { Data = new LoadoutData { Main = unassigned } });
+            var thrown = Assert.Throws<SectionCaptureException>(() => saving.Capture());
+            Assert.That(thrown.Message, Does.Contain("Unassigned"));
+        }
+
+        [Test]
+        public void AssetWithoutAnId_AllowedAsNull_IsSavedAsNothing_WithAWarning()
+        {
+            var unassigned = Make<TestIdentifiedAsset>();
+            unassigned.name = "Unassigned";
+            var loaded = RoundTrip(new LoadoutData { Main = unassigned }, out var saved, UnresolvedAssets.LoadAsNull);
             Assert.That(saved["Main"].Type, Is.EqualTo(JTokenType.Null));
             Assert.That(loaded.Main, Is.Null);
             Assert.That(_log.Warnings.Single(), Does.Contain("Unassigned"));
         }
 
         [Test]
-        public void DestroyedAsset_IsSavedAsNothing()
+        public void DestroyedAsset_RefusesTheSave()
         {
             var sword = MakeSaveable("Sword");
             Object.DestroyImmediate(sword);
-            var loaded = RoundTrip(new LoadoutData { Main = sword }, out var saved);
+            var saving = Service();
+            saving.Register(new LoadoutSection { Data = new LoadoutData { Main = sword } });
+            Assert.Throws<SectionCaptureException>(() => saving.Capture());
+        }
+
+        [Test]
+        public void DestroyedAsset_AllowedAsNull_IsSavedAsNothing()
+        {
+            var sword = MakeSaveable("Sword");
+            Object.DestroyImmediate(sword);
+            var loaded = RoundTrip(new LoadoutData { Main = sword }, out var saved, UnresolvedAssets.LoadAsNull);
             Assert.That(saved["Main"].Type, Is.EqualTo(JTokenType.Null));
             Assert.That(loaded.Main == null);
         }
@@ -177,10 +237,14 @@ namespace SaveSystem.Tests
         [TestCase("true")]
         [TestCase("{\"nested\":{\"a\":1}}")]
         [TestCase("[1,[2]]")]
-        public void Garbage_LoadsAsNull(string value)
+        public void Garbage_FailsTheLoad_OrLoadsAsNullWhenAllowed(string value)
         {
             var json = JObject.Parse("{\"format\":1,\"sections\":{\"loadout\":{\"version\":1,\"data\":{\"Main\":" + value + ",\"Bag\":[]}}}}");
-            var loading = Service();
+            var strict = Service();
+            strict.Register(new LoadoutSection());
+            Assert.That(strict.Restore(SaveDocument.FromJson(json)).Status, Is.EqualTo(LoadStatus.SectionFailed));
+
+            var loading = Service(UnresolvedAssets.LoadAsNull);
             var section = new LoadoutSection();
             loading.Register(section);
             Assert.That(loading.Restore(SaveDocument.FromJson(json)).Succeeded);

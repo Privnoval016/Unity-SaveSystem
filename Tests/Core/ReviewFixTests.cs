@@ -244,7 +244,10 @@ namespace SaveSystem.Tests
             private readonly MemorySaveStorage _inner = new MemorySaveStorage();
             public byte[] Read(string name) => _inner.Read(name);
             public byte[] ReadBackup(string name) => _inner.ReadBackup(name);
+            public byte[] ReadPending(string name) => _inner.ReadPending(name);
             public void Write(string name, byte[] data) => _inner.Write(name, data);
+            public void Repair(string name, byte[] data) => _inner.Repair(name, data);
+            public void CommitPending(string name) => _inner.CommitPending(name);
             public void Delete(string name) => _inner.Delete(name);
             public IReadOnlyList<string> List() => throw new IOException("listing broke");
         }

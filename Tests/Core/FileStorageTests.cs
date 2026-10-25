@@ -89,7 +89,7 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void List_SkipsTempBackupAndForeignFiles()
+        public void List_NamesEachEntryOnce_AnEntryWithOnlyAPendingWriteIncluded_AndSkipsForeignFiles()
         {
             var storage = new FileSaveStorage(_folder.Root);
             storage.Write("b.save", Bytes("1"));
@@ -100,7 +100,9 @@ namespace SaveSystem.Tests
             File.WriteAllText(_folder.FileIn("README.TXT"), "x");
             Directory.CreateDirectory(_folder.FileIn("folder.save"));
 
-            Assert.That(storage.List(), Is.EqualTo(new[] { "a.save", "b.save" }));
+            File.WriteAllText(_folder.FileIn("a.save.tmp"), "x");
+
+            Assert.That(storage.List(), Is.EqualTo(new[] { "a.save", "b.save", "c.save" }), "c has only a pending write a crash left on a first save; reading decides whether it is whole");
         }
 
         [Test]

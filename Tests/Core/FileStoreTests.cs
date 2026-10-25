@@ -94,11 +94,11 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void UnreadableStorage_IsDamaged_NotThrown()
+        public void UnreadableStorage_IsUnreadable_NotDamagedNorThrown()
         {
             var store = new SaveFileStore(new ThrowingStorage(), new SaveSerializer());
             var read = store.Read("a.save", json => json);
-            Assert.That(read.Status, Is.EqualTo(ReadStatus.Damaged));
+            Assert.That(read.Status, Is.EqualTo(ReadStatus.Unreadable), "the file may be fine; nothing older is loaded in its place");
             Assert.That(read.Problem, Does.Contain("denied"));
             Assert.That(store.Delete("a.save"), Does.Contain("denied"));
         }
@@ -127,7 +127,10 @@ namespace SaveSystem.Tests
         {
             public byte[] Read(string name) => throw new UnauthorizedAccessException("denied");
             public byte[] ReadBackup(string name) => throw new UnauthorizedAccessException("denied");
+            public byte[] ReadPending(string name) => throw new UnauthorizedAccessException("denied");
             public void Write(string name, byte[] data) => throw new UnauthorizedAccessException("denied");
+            public void Repair(string name, byte[] data) => throw new UnauthorizedAccessException("denied");
+            public void CommitPending(string name) => throw new UnauthorizedAccessException("denied");
             public void Delete(string name) => throw new UnauthorizedAccessException("denied");
             public IReadOnlyList<string> List() => throw new UnauthorizedAccessException("denied");
         }

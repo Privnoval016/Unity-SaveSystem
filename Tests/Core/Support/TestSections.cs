@@ -28,7 +28,9 @@ namespace SaveSystem.Tests
         public int DefaultValue { get; set; }
         public bool ThrowOnCapture { get; set; }
         public bool ThrowOnRestore { get; set; }
+        public int? ThrowOnRestoreOf { get; set; }
         public int RestoreCount { get; private set; }
+        public int CaptureCount { get; private set; }
         public List<string> RestoreLog { get; set; }
 
         public override string Key => _key;
@@ -53,12 +55,13 @@ namespace SaveSystem.Tests
         protected override CounterData Capture()
         {
             if (ThrowOnCapture) throw new InvalidOperationException("capture broke");
+            CaptureCount++;
             return new CounterData { Value = Value, Note = Note };
         }
 
         protected override void Restore(CounterData data)
         {
-            if (ThrowOnRestore) throw new InvalidOperationException("restore broke");
+            if (ThrowOnRestore || data.Value == ThrowOnRestoreOf) throw new InvalidOperationException("restore broke");
             Value = data.Value;
             Note = data.Note;
             RestoreCount++;

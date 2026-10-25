@@ -25,6 +25,8 @@ namespace SaveSystem
         UnknownTransform,
         /** <summary>A transform could not reverse the payload, such as decryption with the wrong key.</summary> */
         TransformFailed,
+        /** <summary>The file was written in a newer file format than this build reads: not damaged, and never to be written over.</summary> */
+        TooNew,
     }
 
     /** <summary>The outcome of decoding a file: its status, the payload when it worked, and why when it didn't.</summary> */
@@ -217,7 +219,9 @@ namespace SaveSystem
                 try
                 {
                     var header = JObject.Parse(SaveSerializer.Utf8.GetString(file, 0, lineEnd));
-                    if (header.Value<int?>(FormatProperty) != HeaderFormat) return new Frame(DecodeStatus.BadHeader, "Unknown header format.");
+                    var format = header.Value<int?>(FormatProperty);
+                    if (format > HeaderFormat) return new Frame(DecodeStatus.TooNew, $"Written in file format {format}; this build reads format {HeaderFormat}.");
+                    if (format != HeaderFormat) return new Frame(DecodeStatus.BadHeader, "Unknown header format.");
                     var length = header.Value<long?>(LengthProperty) ?? -1;
                     var checksum = header.Value<string>(ChecksumProperty);
                     var transforms = (header[TransformsProperty] as JArray)?.Select(token => token.Value<string>()).ToArray();

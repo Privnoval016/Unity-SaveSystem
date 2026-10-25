@@ -18,15 +18,40 @@ namespace SaveSystem
         byte[] ReadBackup(string name);
 
         /**
-         * <summary>Replaces the entry's bytes. After a crash at any point the entry holds either the old bytes or the new,
-         * and the old bytes are kept as the backup.</summary>
+         * <summary>The bytes of a write that was cut off before it took the entry's place, or null when there are none.
+         * They may be whole or partial; the reader checks them.</summary>
+         */
+        byte[] ReadPending(string name);
+
+        /**
+         * <summary>Replaces the entry's bytes, keeping the old bytes as the backup. After a crash at any point the entry
+         * or its backup holds the old bytes, and the entry or the pending write holds the new; the old backup is never
+         * removed before the new one is in place.</summary>
          */
         void Write(string name, byte[] data);
 
-        /** <summary>Removes the entry, its backup and anything a failed write left behind. Does nothing when there is none.</summary> */
+        /**
+         * <summary>Puts a pending write in the missing entry's place as it is, without rewriting it (the bytes may be the
+         * only copy of the newest save). Does nothing when there is no pending write or the entry exists.</summary>
+         */
+        void CommitPending(string name);
+
+        /**
+         * <summary>Replaces the entry's bytes and leaves its backup as it is: for putting a good backup back over a
+         * damaged entry without losing the backup. Crash safe as <see cref="Write" /> is.</summary>
+         */
+        void Repair(string name, byte[] data);
+
+        /**
+         * <summary>Removes the entry, its backup and any pending write, the entry last, so a delete that fails partway
+         * leaves the entry readable rather than bringing an older backup back. Does nothing when there is none.</summary>
+         */
         void Delete(string name);
 
-        /** <summary>Every entry's name. Backups and leftovers are never listed.</summary> */
+        /**
+         * <summary>Every entry's name: an entry left with only its backup or only a pending write included, each name
+         * once. Backup and pending names themselves are never listed.</summary>
+         */
         IReadOnlyList<string> List();
     }
 }

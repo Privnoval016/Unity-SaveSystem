@@ -4,9 +4,23 @@ using System.IO;
 
 namespace SaveSystem
 {
-    /** <summary>Stores each entry as a file in one folder, written through a temporary file and keeping a <c>.bak</c>.</summary> */
+    /**
+     * <summary>Stores each entry as a file in one folder. A write goes to a temporary file flushed to disk, which then
+     * replaces the entry while the entry becomes the <c>.bak</c>; a file another program holds open for a moment (a
+     * virus scanner, a sync client) is retried.</summary>
+     */
     public sealed class FileSaveStorage : ISaveStorage
     {
+        #region Private Fields
+
+        /** <summary>How long to wait before each retry of a file operation another program blocked, in milliseconds.</summary> */
+        internal static readonly int[] DefaultRetryDelays = { 25, 100, 300 };
+
+        private readonly int[] _retryDelays;
+        private readonly Action<int> _wait;
+
+        #endregion
+
         #region Properties
 
         /** <summary>The folder entries are stored in. Created on the first write.</summary> */
@@ -17,10 +31,15 @@ namespace SaveSystem
         #region Public API
 
         /** <summary>Stores entries in the given folder.</summary> */
-        public FileSaveStorage(string root)
+        public FileSaveStorage(string root) : this(root, DefaultRetryDelays, null) { }
+
+        /** <summary>Stores entries in the given folder, retrying blocked file operations after these delays, waiting with <paramref name="wait" /> (tests).</summary> */
+        internal FileSaveStorage(string root, int[] retryDelays, Action<int> wait)
         {
             if (string.IsNullOrEmpty(root)) throw new ArgumentException("A storage folder is required.", nameof(root));
             Root = Path.GetFullPath(root);
+            _retryDelays = retryDelays ?? DefaultRetryDelays;
+            _wait = wait;
         }
 
         /** <inheritdoc /> */
@@ -30,47 +49,35 @@ namespace SaveSystem
         public byte[] ReadBackup(string name) => ReadIfExists(PathOf(name) + SaveNames.BackupSuffix);
 
         /** <inheritdoc /> */
-        public void Write(string name, byte[] data)
+        public byte[] ReadPending(string name) => ReadIfExists(PathOf(name) + SaveNames.TempSuffix);
+
+        /** <inheritdoc /> */
+        public void CommitPending(string name)
         {
             var path = PathOf(name);
             var temp = path + SaveNames.TempSuffix;
-            var backup = path + SaveNames.BackupSuffix;
-
-            Directory.CreateDirectory(Root);
-            using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+            Retry.Run(() =>
             {
-                stream.Write(data, 0, data.Length);
-                stream.Flush(true);
-            }
-
-            var movedToBackup = false;
-            if (File.Exists(path))
-            {
-                DeleteIfExists(backup);
-                File.Move(path, backup);
-                movedToBackup = true;
-            }
-            try
-            {
-                File.Move(temp, path);
-            }
-            catch (Exception)
-            {
-                if (movedToBackup && !File.Exists(path)) TryMove(backup, path);
-                throw;
-            }
+                if (!File.Exists(path) && File.Exists(temp)) File.Move(temp, path);
+            }, _retryDelays, _wait);
         }
+
+        /** <inheritdoc /> */
+        public void Write(string name, byte[] data) => Put(PathOf(name), data, true);
+
+        /** <inheritdoc /> */
+        public void Repair(string name, byte[] data) => Put(PathOf(name), data, false);
 
         /** <inheritdoc /> */
         public void Delete(string name)
         {
             var path = PathOf(name);
-            DeleteIfExists(path);
-            DeleteIfExists(path + SaveNames.BackupSuffix);
-            DeleteIfExists(path + SaveNames.TempSuffix);
+            Retry.Run(() => DeleteIfExists(path + SaveNames.BackupSuffix), _retryDelays, _wait);
+            Retry.Run(() => DeleteIfExists(path + SaveNames.TempSuffix), _retryDelays, _wait);
+            Retry.Run(() => DeleteIfExists(path), _retryDelays, _wait);
         }
 
-        /** <inheritdoc /> <remarks>An entry left with only its backup, by a write cut short, is listed too.</remarks> */
+        /** <inheritdoc /> */
         public IReadOnlyList<string> List()
         {
             var names = new SortedSet<string>(StringComparer.Ordinal);
@@ -79,6 +86,7 @@ namespace SaveSystem
             {
                 var name = Path.GetFileName(path);
                 if (name.EndsWith(SaveNames.BackupSuffix, StringComparison.Ordinal)) name = name.Substring(0, name.Length - SaveNames.BackupSuffix.Length);
+                else if (name.EndsWith(SaveNames.TempSuffix, StringComparison.Ordinal)) name = name.Substring(0, name.Length - SaveNames.TempSuffix.Length);
                 if (SaveNames.IsValidEntryName(name)) names.Add(name);
             }
             return new List<string>(names);
@@ -88,19 +96,76 @@ namespace SaveSystem
 
         #region Helpers
 
+        /**
+         * <summary>Writes <paramref name="data" /> to the temporary file, flushed to disk, then puts it in the entry's
+         * place: the entry becoming the backup when <paramref name="keepAsBackup" />, the backup untouched otherwise. A
+         * failure leaves the entry and backup as they were and removes the temporary file, except a whole one when a
+         * swap failed halfway (the entry already moved to the backup): it is then the newest copy, read as pending.</summary>
+         */
+        private void Put(string path, byte[] data, bool keepAsBackup)
+        {
+            var temp = path + SaveNames.TempSuffix;
+            var whole = false;
+            var hadEntry = File.Exists(path);
+            Directory.CreateDirectory(Root);
+            try
+            {
+                Retry.Run(() =>
+                {
+                    using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        stream.Write(data, 0, data.Length);
+                        stream.Flush(true);
+                    }
+                }, _retryDelays, _wait);
+                whole = true;
+                Retry.Run(() => Swap(temp, path, keepAsBackup ? path + SaveNames.BackupSuffix : null), _retryDelays, _wait);
+            }
+            catch (Exception)
+            {
+                var movedAway = whole && hadEntry && keepAsBackup && !File.Exists(path) && File.Exists(path + SaveNames.BackupSuffix);
+                if (!movedAway) TryDelete(temp);
+                throw;
+            }
+        }
+
+        /**
+         * <summary>Puts the temporary file in the entry's place, deciding afresh on each try whether the entry is there (a
+         * swap that failed halfway may have moved it). Where <see cref="File.Replace(string, string, string, bool)" /> isn't
+         * supported, the entry is copied to the backup before it is removed, so a crash still leaves a copy.</summary>
+         */
+        private static void Swap(string temp, string path, string backup)
+        {
+            if (!File.Exists(path))
+            {
+                File.Move(temp, path);
+                return;
+            }
+            try
+            {
+                File.Replace(temp, path, backup, true);
+            }
+            catch (Exception e) when (e is NotSupportedException || e is PlatformNotSupportedException)
+            {
+                if (backup != null) File.Copy(path, backup, true);
+                File.Delete(path);
+                File.Move(temp, path);
+            }
+        }
+
         private string PathOf(string name)
         {
             if (!SaveNames.IsValidEntryName(name)) throw new ArgumentException($"Invalid entry name '{name}'.", nameof(name));
             return Path.Combine(Root, name);
         }
 
-        private static byte[] ReadIfExists(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;
+        private byte[] ReadIfExists(string path) => Retry.Run(() => File.Exists(path) ? File.ReadAllBytes(path) : null, _retryDelays, _wait);
 
-        private static void TryMove(string from, string to)
+        private static void TryDelete(string path)
         {
             try
             {
-                File.Move(from, to);
+                DeleteIfExists(path);
             }
             catch (IOException)
             {

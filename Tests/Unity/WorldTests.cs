@@ -68,6 +68,17 @@ namespace SaveSystem.Tests
         }
 
         [Test]
+        public void TheSameWorld_WritesTheSameBytes_WhateverOrderItsEntitiesCameIn()
+        {
+            var first = Entity("First");
+            var second = Entity("Second");
+            With<TestChest>(first).Coins = 3;
+            With<TestChest>(second).Coins = 4;
+            string Written(SaveDocument document) => document.Sections["world/test"].Data.ToString();
+            Assert.That(Written(Save(first, second)), Is.EqualTo(Written(Save(second, first))));
+        }
+
+        [Test]
         public void Components_RoundTrip()
         {
             var entity = Entity("Chest");
@@ -242,7 +253,7 @@ namespace SaveSystem.Tests
         }
 
         [Test]
-        public void ThrowingComponent_IsReported_AndTheRestRestore()
+        public void ThrowingComponent_IsReported_AndTheSceneIsPutBack()
         {
             var good = Entity("Good");
             var goodChest = With<TestChest>(good);
@@ -251,11 +262,12 @@ namespace SaveSystem.Tests
             goodChest.Coins = 1;
             var document = Save(good, bad);
             goodChest.Coins = 50;
-            badChest.ThrowOnRestore = true;
+            badChest.ThrowOnRestoreOf = badChest.Coins;
+            badChest.Coins = 4;
 
             var result = Load(document, good, bad);
-            Assert.That(result.Status, Is.EqualTo(LoadStatus.RestoreFailed));
-            Assert.That(goodChest.Coins, Is.EqualTo(1));
+            Assert.That((result.Status, result.RolledBack), Is.EqualTo((LoadStatus.RestoreFailed, true)));
+            Assert.That((goodChest.Coins, badChest.Coins), Is.EqualTo((50, 4)), "the whole scene is put back as it was before the load, the failing chest too");
         }
 
         [Test]

@@ -21,6 +21,9 @@ namespace SaveSystem.Tests
 
         public MemorySaveStorage Inner { get; } = new MemorySaveStorage();
         public Func<string, bool> FailWrite { get; set; } = _ => false;
+        public Func<string, bool> FailRepair { get; set; } = _ => false;
+        public Func<string, bool> FailRead { get; set; } = _ => false;
+        public bool FailReadPending { get; set; }
         public ManualResetEventSlim WriteGate { get; } = new ManualResetEventSlim(true);
         public ManualResetEventSlim WriteStarted { get; } = new ManualResetEventSlim(false);
 
@@ -46,6 +49,7 @@ namespace SaveSystem.Tests
         public byte[] Read(string name)
         {
             Count(name);
+            if (FailRead(name)) throw new IOException("held by another program");
             return Inner.Read(name);
         }
 
@@ -55,12 +59,27 @@ namespace SaveSystem.Tests
             return Inner.ReadBackup(name);
         }
 
+        public byte[] ReadPending(string name)
+        {
+            Count(name);
+            if (FailReadPending) throw new IOException("held by another program");
+            return Inner.ReadPending(name);
+        }
+
         public void Write(string name, byte[] data)
         {
             WriteStarted.Set();
             if (!WriteGate.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException("write gate never opened");
             if (FailWrite(name)) throw new IOException("disk full");
             Inner.Write(name, data);
+        }
+
+        public void CommitPending(string name) => Inner.CommitPending(name);
+
+        public void Repair(string name, byte[] data)
+        {
+            if (FailRepair(name)) throw new IOException("disk full");
+            Inner.Repair(name, data);
         }
 
         public void Delete(string name) => Inner.Delete(name);

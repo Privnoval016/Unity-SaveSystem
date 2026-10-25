@@ -9,6 +9,10 @@ namespace SaveSystem
         CaptureFailed,
         /** <summary>The file could not be written. The previous save is intact.</summary> */
         WriteFailed,
+        /** <summary>The save there was written by a newer build; it was kept, not written over.</summary> */
+        TooNew,
+        /** <summary>A load was under way, so nothing was captured or written; ask again once it ends.</summary> */
+        Busy,
     }
 
     /** <summary>The outcome of a save.</summary> */

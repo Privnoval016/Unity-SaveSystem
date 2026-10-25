@@ -23,6 +23,15 @@ namespace SaveSystem
         /** <summary>The document layout this code writes. Newer documents are refused.</summary> */
         public const int CurrentFormat = 1;
 
+        /** <summary>The JSON name of the document's format.</summary> */
+        public const string FormatKey = FormatProperty;
+
+        /** <summary>The JSON name of the object holding each section's record.</summary> */
+        public const string SectionsKey = SectionsProperty;
+
+        /** <summary>The JSON name of a section record's version.</summary> */
+        public const string VersionKey = VersionProperty;
+
         /** <summary>The layout version the document was written with.</summary> */
         public int Format { get; }
 
