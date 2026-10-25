@@ -203,8 +203,6 @@ namespace SaveSystem
                 _headers.Write(SlotEntries.Header(slot), expected);
         }
 
-        private IReadOnlyList<SlotSummary<TInfo>> ListSlots() => ListSlots(false);
-
         private IReadOnlyList<SlotSummary<TInfo>> ListSlots(bool checkSaves)
         {
             var slots = new List<SlotSummary<TInfo>>();
@@ -300,7 +298,7 @@ namespace SaveSystem
             if (_highestSequence == null)
             {
                 var highest = 0L;
-                foreach (var summary in ListSlots())
+                foreach (var summary in ListSlots(false))
                     highest = Math.Max(highest, AgeOf(summary.Slot).Sequence);
                 _highestSequence = highest;
             }

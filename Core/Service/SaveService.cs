@@ -235,7 +235,7 @@ namespace SaveSystem
                     continue;
                 }
                 var defaulted = SectionPreparer.Default(section);
-                reports.Add(defaulted.Succeeded ? TryApply(defaulted) : defaulted.Report);
+                reports.Add(ApplyIfPrepared(defaulted));
             }
             HoldUnregistered(load.Document, reports);
             _appliedUpgrades.Clear();
@@ -347,7 +347,7 @@ namespace SaveSystem
         private SectionReport RestoreRegistered(ISaveSection section, SectionRecord record, bool settle)
         {
             var prepared = SectionPreparer.FromRecord(section, record, Serializer.Json);
-            var report = prepared.Succeeded ? TryApply(prepared) : prepared.Report;
+            var report = ApplyIfPrepared(prepared);
             if (report.Outcome == SectionOutcome.Failed)
             {
                 Remove(section);
@@ -448,7 +448,7 @@ namespace SaveSystem
                 var prepared = before.Sections.TryGetValue(section.Key, out var record)
                     ? SectionPreparer.FromRecord(section, record, Serializer.Json)
                     : SectionPreparer.Default(section);
-                var report = prepared.Succeeded ? TryApply(prepared) : prepared.Report;
+                var report = ApplyIfPrepared(prepared);
                 if (report.Outcome != SectionOutcome.Failed) continue;
                 problems.Add(report.ToString());
                 if (record != null) _pinned[section.Key] = record;
@@ -471,6 +471,9 @@ namespace SaveSystem
             _log.Error($"Save: a restore failed, and putting it back failed too ({string.Join("; ", problems)}); those sections are saved with their last good data. {failed.Problem}");
             return failed.WithRollback(false, "putting it back failed: " + string.Join("; ", problems));
         }
+
+        /** <summary>Applies <paramref name="prepared" /> if it was prepared; otherwise its preparation's report.</summary> */
+        private SectionReport ApplyIfPrepared(PreparedSection prepared) => prepared.Succeeded ? TryApply(prepared) : prepared.Report;
 
         private SectionReport TryApply(PreparedSection prepared)
         {

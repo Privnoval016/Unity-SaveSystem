@@ -56,10 +56,10 @@ namespace SaveSystem
         {
             var path = PathOf(name);
             var temp = path + SaveNames.TempSuffix;
-            Retry.Run(() =>
+            Retried(() =>
             {
                 if (!File.Exists(path) && File.Exists(temp)) File.Move(temp, path);
-            }, _retryDelays, _wait);
+            });
         }
 
         /** <inheritdoc /> */
@@ -72,9 +72,9 @@ namespace SaveSystem
         public void Delete(string name)
         {
             var path = PathOf(name);
-            Retry.Run(() => DeleteIfExists(path + SaveNames.BackupSuffix), _retryDelays, _wait);
-            Retry.Run(() => DeleteIfExists(path + SaveNames.TempSuffix), _retryDelays, _wait);
-            Retry.Run(() => DeleteIfExists(path), _retryDelays, _wait);
+            Retried(() => DeleteIfExists(path + SaveNames.BackupSuffix));
+            Retried(() => DeleteIfExists(path + SaveNames.TempSuffix));
+            Retried(() => DeleteIfExists(path));
         }
 
         /** <inheritdoc /> */
@@ -96,6 +96,12 @@ namespace SaveSystem
 
         #region Helpers
 
+        /** <summary>Runs <paramref name="work" />, retrying it after this storage's delays while another program blocks the file.</summary> */
+        private void Retried(Action work) => Retry.Run(work, _retryDelays, _wait);
+
+        /** <summary>As <see cref="Retried(Action)" />, returning what <paramref name="work" /> gives.</summary> */
+        private T Retried<T>(Func<T> work) => Retry.Run(work, _retryDelays, _wait);
+
         /**
          * <summary>Writes <paramref name="data" /> to the temporary file, flushed to disk, then puts it in the entry's
          * place: the entry becoming the backup when <paramref name="keepAsBackup" />, the backup untouched otherwise. A
@@ -110,16 +116,16 @@ namespace SaveSystem
             Directory.CreateDirectory(Root);
             try
             {
-                Retry.Run(() =>
+                Retried(() =>
                 {
                     using (var stream = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
                         stream.Write(data, 0, data.Length);
                         stream.Flush(true);
                     }
-                }, _retryDelays, _wait);
+                });
                 whole = true;
-                Retry.Run(() => Swap(temp, path, keepAsBackup ? path + SaveNames.BackupSuffix : null), _retryDelays, _wait);
+                Retried(() => Swap(temp, path, keepAsBackup ? path + SaveNames.BackupSuffix : null));
             }
             catch (Exception)
             {
@@ -159,7 +165,7 @@ namespace SaveSystem
             return Path.Combine(Root, name);
         }
 
-        private byte[] ReadIfExists(string path) => Retry.Run(() => File.Exists(path) ? File.ReadAllBytes(path) : null, _retryDelays, _wait);
+        private byte[] ReadIfExists(string path) => Retried(() => File.Exists(path) ? File.ReadAllBytes(path) : null);
 
         private static void TryDelete(string path)
         {
