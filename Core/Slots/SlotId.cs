@@ -56,6 +56,19 @@ namespace SaveSystem
             return true;
         }
 
+        /** <summary>The number of a numbered manual slot or autosave; false for a named slot.</summary> */
+        public bool TryGetNumber(out int number)
+        {
+            number = 0;
+            var prefix = IsAuto ? AutoPrefix : ManualPrefix;
+            if (Name == null || !Name.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            var digits = Name.Substring(prefix.Length);
+            if (digits.Length == 0) return false;
+            foreach (var c in digits)
+                if (c < '0' || c > '9') return false;
+            return int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out number) && number >= 1 && number <= MaxNumber;
+        }
+
         /** <inheritdoc /> */
         public bool Equals(SlotId other) => string.Equals(Name, other.Name, StringComparison.Ordinal);
 

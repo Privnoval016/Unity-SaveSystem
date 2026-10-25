@@ -157,6 +157,16 @@ namespace SaveSystem.Tests
             Assert.That((await slots.AutosaveAsync()).SavedTo, Is.EqualTo("auto-01"));
         }
 
+        [Test]
+        public void ANumberedSlot_GivesItsNumber_ANamedSlotNone()
+        {
+            Assert.That((SlotId.Manual(7).TryGetNumber(out var manual), manual), Is.EqualTo((true, 7)));
+            Assert.That((SlotId.Auto(SlotId.MaxNumber).TryGetNumber(out var auto), auto), Is.EqualTo((true, SlotId.MaxNumber)));
+            foreach (var name in new[] { "quicksave-7", "manual-", "manual-x1", "manual-1000", "manual-00", "chapter-2" })
+                Assert.That(SlotId.TryParse(name, out var slot) && slot.TryGetNumber(out _), Is.False, name);
+            Assert.That(default(SlotId).TryGetNumber(out _), Is.False);
+        }
+
         [TestCase(0)]
         [TestCase(SlotId.MaxNumber + 1)]
         public void AutosaveCountOutOfRange_Throws(int count)

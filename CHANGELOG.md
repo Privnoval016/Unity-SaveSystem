@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 (2026-10-25)
+
+- `SlotId.TryGetNumber`: the number of a numbered manual slot or autosave; false for a named slot (so a
+  quicksave named `quicksave-7` is never read as slot 7).
+
 ## 0.5.0 (2026-10-25)
 
 From an audit and a five-viewpoint review (correctness, crash safety and concurrency, API, tests, an adversary):
