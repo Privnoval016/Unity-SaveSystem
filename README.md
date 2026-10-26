@@ -92,6 +92,13 @@ public sealed class InventorySection : SaveSection<InventoryData>
 }
 ```
 
+When the state already captures and restores itself, a `DelegateSection<TData>` stands in for the class, taking the
+key, the two functions and an optional new-game default:
+
+```csharp
+game.Register(new DelegateSection<WalletData>("wallet", wallet.Capture, wallet.Restore));
+```
+
 - **The data class is the schema on disk.** Rename or remove a field only with an upgrade (below).
 - **`Capture` must return a snapshot** that shares no lists with live state.
 - **`CreateDefault`** gives a new game's state. A save with no data for the section restores this, which covers
