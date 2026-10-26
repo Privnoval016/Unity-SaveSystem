@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.2 (2026-10-25)
+
+- `DelegateSection<TData>`: a section made from its key, a capture, a restore and an optional new-game default,
+  for state that already captures and restores itself (no section class of its own).
+- Internal: file storage retries through one helper, and the apply-or-report sites share one; behaviour unchanged.
+- Tests: `SpyStorage` can hold a read (`ReadGate`) and fail listing (`FailList`).
+
 ## 0.5.1 (2026-10-25)
 
 - `SlotId.TryGetNumber`: the number of a numbered manual slot or autosave; false for a named slot (so a
