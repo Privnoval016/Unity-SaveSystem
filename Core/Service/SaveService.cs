@@ -159,26 +159,14 @@ namespace SaveSystem
          * <summary>Captures every registered section, plus the held data, into a new document.</summary>
          * <exception cref="SectionCaptureException">A section threw.</exception>
          */
-        public SaveDocument Capture()
-        {
-            var document = new SaveDocument();
-            document.AppliedUpgrades.UnionWith(_appliedUpgrades);
-            document.AppliedUpgrades.UnionWith(_documentUpgrades.Select(upgrade => upgrade.Id));
-            foreach (var pair in _held)
-                document.Sections[pair.Key] = pair.Value;
-            foreach (var section in _sections)
-            {
-                if (_pinned.TryGetValue(section.Key, out var pinned))
-                {
-                    document.Sections[section.Key] = pinned;
-                    continue;
-                }
-                var record = new SectionRecord(section.Version, CaptureSection(section));
-                document.Sections[section.Key] = record;
-                _last[section.Key] = record;
-            }
-            return document;
-        }
+        public SaveDocument Capture() => Capture(true);
+
+        /**
+         * <summary>The document <see cref="Capture()" /> would make, leaving nothing behind: what a section falls back to
+         * when it fails to capture as it goes is still its last save's. For comparing state (a tool, a test), not for saving.</summary>
+         * <exception cref="SectionCaptureException">A section threw.</exception>
+         */
+        public SaveDocument Snapshot() => Capture(false);
 
         /** <summary>Restores every registered section from a document; nothing changes unless every section can be read.</summary> */
         public LoadResult Restore(SaveDocument document)
@@ -283,6 +271,28 @@ namespace SaveSystem
         #endregion
 
         #region Helpers
+
+        /** <summary>Captures every section and the held data; <paramref name="remember" /> keeps each capture as its last.</summary> */
+        private SaveDocument Capture(bool remember)
+        {
+            var document = new SaveDocument();
+            document.AppliedUpgrades.UnionWith(_appliedUpgrades);
+            document.AppliedUpgrades.UnionWith(_documentUpgrades.Select(upgrade => upgrade.Id));
+            foreach (var pair in _held)
+                document.Sections[pair.Key] = pair.Value;
+            foreach (var section in _sections)
+            {
+                if (_pinned.TryGetValue(section.Key, out var pinned))
+                {
+                    document.Sections[section.Key] = pinned;
+                    continue;
+                }
+                var record = new SectionRecord(section.Version, CaptureSection(section));
+                document.Sections[section.Key] = record;
+                if (remember) _last[section.Key] = record;
+            }
+            return document;
+        }
 
         private void Add(ISaveSection section)
         {

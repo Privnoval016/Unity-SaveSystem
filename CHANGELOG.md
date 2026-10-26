@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3 (2026-10-26)
+
+- `SaveService.Snapshot()`: the document a save would write, leaving nothing behind (unlike `Capture`, it is not kept
+  as the state a section falls back to when it fails to capture on unregister).
+- `SaveFingerprint`: a document as readable, comparable text (`Of`, optionally rounding fractions; `Differences`).
+
 ## 0.5.2 (2026-10-25)
 
 - `DelegateSection<TData>`: a section made from its key, a capture, a restore and an optional new-game default,

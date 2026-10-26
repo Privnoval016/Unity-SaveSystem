@@ -473,6 +473,12 @@ service.Unregister(section, keepState: false); // or forgets it: an area left wh
 The browser reads plain and gzip saves. Code that opens `SaveBrowserModel` itself can pass the AES transforms the
 game uses, to read encrypted saves as well. Deleting asks inside the window, never in a dialog.
 
+**Comparing state.** `SaveService.Snapshot()` is the document a save would write, leaving nothing behind (a section
+that later fails to capture still falls back to its last save's state). `SaveFingerprint.Of(document, leaveOut)` turns
+it into readable text, the same for the same state: sections in key order, each object's properties in ordinal order;
+`Of(document, decimals, leaveOut)` rounds fractions too, for state a physics step nudges. Take one before a save and one
+after its load to prove a round trip; `SaveFingerprint.Differences` names the sections that differ.
+
 ## Scale
 
 Measured in the editor on a Mac: 300 sections plus one area with 1,000 entities, each with two saved components.
