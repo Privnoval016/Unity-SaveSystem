@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.4 (2026-10-27)
+
+- `SaveFingerprint.Sections(text)` and `Differences(before, after)` over fingerprint texts (a recorded one kept in a
+  file against a fresh one), whatever their line endings.
+- `SaveFingerprint.Of` with decimals: a tiny negative rounds to `0`, never `-0`, so it matches a tiny positive.
+- README: a snapshot still refreshes a live scene entity's last known state (what it keeps if it is destroyed before a
+  save).
+
 ## 0.5.3 (2026-10-26)
 
 - `SaveService.Snapshot()`: the document a save would write, leaving nothing behind (unlike `Capture`, it is not kept

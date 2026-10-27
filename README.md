@@ -477,7 +477,10 @@ game uses, to read encrypted saves as well. Deleting asks inside the window, nev
 that later fails to capture still falls back to its last save's state). `SaveFingerprint.Of(document, leaveOut)` turns
 it into readable text, the same for the same state: sections in key order, each object's properties in ordinal order;
 `Of(document, decimals, leaveOut)` rounds fractions too, for state a physics step nudges. Take one before a save and one
-after its load to prove a round trip; `SaveFingerprint.Differences` names the sections that differ.
+after its load to prove a round trip; `SaveFingerprint.Differences` names the sections that differ, between two
+documents or two fingerprint texts (`Sections(text)` splits one by key). A snapshot leaves the sections' fallbacks
+alone, but a scene's live entities still capture as they would in a save, so each one's last known state (what it
+keeps if destroyed before the next save) moves to now.
 
 ## Scale
 

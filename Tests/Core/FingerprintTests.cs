@@ -79,6 +79,15 @@ namespace SaveSystem.Tests
         }
 
         [Test]
+        public void RoundedToSomePlaces_ATinyNegative_IsTheSameAsATinyPositive()
+        {
+            var below = SaveFingerprint.Of(Document(("place", 1, new JObject { ["x"] = -0.00003 })), 4);
+
+            Assert.That(below, Is.EqualTo(SaveFingerprint.Of(Document(("place", 1, new JObject { ["x"] = 0.00001 })), 4)));
+            Assert.That(below, Does.Not.Contain("-0"));
+        }
+
+        [Test]
         public void Differences_NameEachSectionThatChanged_OrIsInOnlyOne()
         {
             var before = Document(("same", 1, new JObject { ["v"] = 1 }), ("changed", 1, new JObject { ["v"] = 1 }), ("versioned", 1, new JObject()), ("gone", 1, new JObject()), ("clock", 1, new JObject { ["s"] = 1 }));
@@ -86,6 +95,28 @@ namespace SaveSystem.Tests
 
             Assert.That(SaveFingerprint.Differences(before, after, "clock"), Is.EqualTo(new[] { "changed", "gone", "new", "versioned" }));
             Assert.That(SaveFingerprint.Differences(before, before), Is.Empty);
+        }
+
+        [Test]
+        public void Sections_SplitAFingerprintsText_ByKey_WhateverItsLineEndings()
+        {
+            var text = SaveFingerprint.Of(Document(("bag", 1, new JObject { ["note"] = "== not a heading" }), ("wallet", 2, new JObject { ["mon"] = 5 })));
+
+            var sections = SaveFingerprint.Sections(text.Replace("\n", "\r\n"));
+
+            Assert.That(sections.Keys, Is.EqualTo(new[] { "bag", "wallet" }));
+            Assert.That(sections["wallet"], Does.StartWith("== wallet v2\n").And.Contain("\"mon\": 5").And.Not.Contain("\r"));
+            Assert.That(sections["bag"], Does.Contain("== not a heading"), "a heading only starts a line");
+        }
+
+        [Test]
+        public void Differences_BetweenTexts_NameEachSectionThatChanged_OrIsInOnlyOne()
+        {
+            var before = SaveFingerprint.Of(Document(("same", 1, new JObject { ["v"] = 1 }), ("changed", 1, new JObject { ["v"] = 1 }), ("versioned", 1, new JObject()), ("gone", 1, new JObject())));
+            var after = SaveFingerprint.Of(Document(("same", 1, new JObject { ["v"] = 1 }), ("changed", 1, new JObject { ["v"] = 2 }), ("versioned", 2, new JObject()), ("new", 1, new JObject())));
+
+            Assert.That(SaveFingerprint.Differences(before, after), Is.EqualTo(new[] { "changed", "gone", "new", "versioned" }));
+            Assert.That(SaveFingerprint.Differences(before, before.Replace("\n", "\r\n")), Is.Empty);
         }
     }
 }

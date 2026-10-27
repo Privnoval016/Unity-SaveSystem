@@ -13,6 +13,12 @@ namespace SaveSystem
      */
     public static class SaveFingerprint
     {
+        #region Private Fields
+
+        private const string Heading = "== ";
+
+        #endregion
+
         #region Public API
 
         /** <summary>The fingerprint of <paramref name="document" />, without the sections keyed <paramref name="leaveOut" /> (state that changes on its own, such as play time).</summary> */
@@ -30,7 +36,7 @@ namespace SaveSystem
             foreach (var pair in document.Sections)
             {
                 if (Array.IndexOf(leaveOut, pair.Key) >= 0) continue;
-                text.Append("== ").Append(pair.Key).Append(" v").Append(pair.Value.Version).Append('\n');
+                text.Append(Heading).Append(pair.Key).Append(" v").Append(pair.Value.Version).Append('\n');
                 text.Append(Text(pair.Value, decimals)).Append('\n');
             }
 
@@ -57,6 +63,44 @@ namespace SaveSystem
             return differing;
         }
 
+        /** <summary>Each section of a fingerprint's <paramref name="text" /> by key: its heading line and data, line endings made <c>\n</c> (a fingerprint kept in a file may have come back with others).</summary> */
+        public static IReadOnlyDictionary<string, string> Sections(string text)
+        {
+            if (text == null) throw new ArgumentNullException(nameof(text));
+
+            var sections = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            string key = null;
+            var block = new StringBuilder();
+            foreach (var line in text.Replace("\r\n", "\n").Split('\n'))
+            {
+                if (line.StartsWith(Heading, StringComparison.Ordinal))
+                {
+                    if (key != null) sections[key] = block.ToString();
+                    var version = line.LastIndexOf(" v", StringComparison.Ordinal);
+                    key = version > Heading.Length ? line.Substring(Heading.Length, version - Heading.Length) : line.Substring(Heading.Length);
+                    block.Clear();
+                }
+                block.Append(line).Append('\n');
+            }
+            if (key != null) sections[key] = block.ToString();
+
+            return sections;
+        }
+
+        /** <summary>As <see cref="Differences(SaveDocument, SaveDocument, string[])" />, between two fingerprints' texts.</summary> */
+        public static IReadOnlyList<string> Differences(string before, string after)
+        {
+            var was = Sections(before);
+            var now = Sections(after);
+            var keys = new SortedSet<string>(was.Keys, StringComparer.Ordinal);
+            keys.UnionWith(now.Keys);
+            var differing = new List<string>();
+            foreach (var key in keys)
+                if (!was.TryGetValue(key, out var a) || !now.TryGetValue(key, out var b) || a != b) differing.Add(key);
+
+            return differing;
+        }
+
         #endregion
 
         #region Helpers
@@ -70,12 +114,12 @@ namespace SaveSystem
             return data.ToString(Formatting.Indented);
         }
 
-        /** <summary>Rounds every fractional number in <paramref name="json" />, in place.</summary> */
+        /** <summary>Rounds every fractional number in <paramref name="json" />, in place; adding 0.0 makes a rounded tiny negative 0, never -0.</summary> */
         private static void Round(JToken json, int decimals)
         {
             if (json is JValue { Type: JTokenType.Float } number)
             {
-                number.Value = Math.Round(number.Value<double>(), decimals, MidpointRounding.AwayFromZero);
+                number.Value = Math.Round(number.Value<double>(), decimals, MidpointRounding.AwayFromZero) + 0.0;
                 return;
             }
 
